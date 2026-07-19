@@ -46,6 +46,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private readonly List<string> report = new List<string>();
     private readonly List<Vector3> shellRestPositions = new List<Vector3>();
     private readonly List<Quaternion> shellRestRotations = new List<Quaternion>();
+    private readonly List<Transform> shellRestParents = new List<Transform>();
     private readonly System.Random seedSource = new System.Random();
     private AudioClip liveShotClip;
     private AudioClip blankClickClip;
@@ -101,6 +102,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
         pumpRestRotation = weaponPump.localRotation;
         foreach (var shell in shellProps)
         {
+            shellRestParents.Add(shell.transform.parent);
             shellRestPositions.Add(shell.transform.localPosition);
             shellRestRotations.Add(shell.transform.localRotation);
         }
@@ -197,36 +199,23 @@ public sealed class ChamberLogicGame : MonoBehaviour
         }
         Debug.Log("[Chamber] Loading reveal: 2 live shells and 4 blank shells. Their order is hidden.");
         yield return new WaitForSeconds(1.8f);
+
+        // The doll visibly takes control of the weapon before loading it. The
+        // left hand remains on the fore grip while the right hand handles shells.
+        yield return MoveDealerHandsToWeapon(false, 0.55f);
         yield return OpenWeaponAction(0.62f);
-        yield return new WaitForSeconds(0.24f);
+        yield return new WaitForSeconds(0.18f);
+        yield return MoveHandToRest(dealerRightHand, rightHandRestParent, rightHandRestPosition, rightHandRestRotation, 0.28f);
 
         for (var i = 0; i < shellProps.Count; i++)
         {
             var shell = shellProps[i];
             if (shell == null) continue;
-            var start = shell.transform.position;
-            var startRotation = shell.transform.rotation;
-            mechanicalSource.PlayOneShot(shellLoadClip, 0.52f);
-            var approach = weaponBreechAnchor.position + Vector3.down * 0.115f;
-            for (var t = 0f; t < 0.32f; t += Time.deltaTime)
-            {
-                var progress = Mathf.SmoothStep(0f, 1f, t / 0.32f);
-                shell.transform.position = Vector3.Lerp(start, approach, progress) + Vector3.up * Mathf.Sin(progress * Mathf.PI) * 0.10f;
-                shell.transform.rotation = Quaternion.Slerp(startRotation, weaponBreechAnchor.rotation, progress);
-                yield return null;
-            }
-            for (var t = 0f; t < 0.18f; t += Time.deltaTime)
-            {
-                var progress = Mathf.SmoothStep(0f, 1f, t / 0.18f);
-                shell.transform.position = Vector3.Lerp(approach, weaponBreechAnchor.position, progress);
-                shell.transform.rotation = weaponBreechAnchor.rotation;
-                yield return null;
-            }
-            shell.SetActive(false);
-            yield return new WaitForSeconds(0.22f);
+            yield return LoadShellByHand(shell, i);
         }
 
         yield return CloseWeaponAction(0.58f);
+        yield return ReturnDealerHands(0.42f);
 
         if (roundRevealText != null) roundRevealText.text = "REMEMBER THE MIX\nP(LIVE NEXT) = 2 / 6";
         yield return new WaitForSeconds(2.2f);
@@ -265,6 +254,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
         {
             if (shellProps[i] == null) continue;
             shellProps[i].SetActive(true);
+            if (i < shellRestParents.Count) shellProps[i].transform.SetParent(shellRestParents[i], false);
             if (i < shellRestPositions.Count) shellProps[i].transform.localPosition = shellRestPositions[i];
             if (i < shellRestRotations.Count) shellProps[i].transform.localRotation = shellRestRotations[i];
         }
@@ -533,6 +523,74 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
         AttachHand(dealerRightHand, rightTarget);
         AttachHand(dealerLeftHand, leftTarget);
+    }
+
+    private IEnumerator LoadShellByHand(GameObject shell, int shellIndex)
+    {
+        var shellTransform = shell.transform;
+        var shellRenderer = shell.GetComponentInChildren<Renderer>();
+        var handRenderer = dealerRightHand.GetComponentInChildren<Renderer>();
+        var handVisualOffset = handRenderer.bounds.center - dealerRightHand.position;
+        var shellCenter = shellRenderer.bounds.center;
+        var pickupPosition = shellCenter + Vector3.right * 0.032f + Vector3.up * 0.006f - handVisualOffset;
+        var pickupRotation = rightHandRestParent.rotation * rightHandRestRotation * Quaternion.Euler(0f, 0f, -12f);
+
+        yield return MoveHandWorld(dealerRightHand, pickupPosition, pickupRotation, 0.34f, 0.035f);
+        yield return new WaitForSeconds(0.08f);
+
+        shellTransform.SetParent(dealerRightHand, true);
+        var shellLocalPosition = shellTransform.localPosition;
+        var shellLocalRotation = shellTransform.localRotation;
+        var approach = weaponBreechAnchor.position - weaponBreechAnchor.forward * 0.105f;
+        GetHandPoseForShell(shellLocalPosition, shellLocalRotation, approach, weaponBreechAnchor.rotation,
+            out var approachHandPosition, out var approachHandRotation);
+        yield return MoveHandWorld(dealerRightHand, approachHandPosition, approachHandRotation, 0.38f, 0.055f);
+
+        mechanicalSource.PlayOneShot(shellLoadClip, 0.52f);
+        GetHandPoseForShell(shellLocalPosition, shellLocalRotation, weaponBreechAnchor.position, weaponBreechAnchor.rotation,
+            out var insertHandPosition, out var insertHandRotation);
+        yield return MoveHandWorld(dealerRightHand, insertHandPosition, insertHandRotation, 0.18f, 0f);
+
+        if (shellIndex < shellRestParents.Count) shellTransform.SetParent(shellRestParents[shellIndex], true);
+        shell.SetActive(false);
+        yield return new WaitForSeconds(0.08f);
+        yield return MoveHandToRest(dealerRightHand, rightHandRestParent, rightHandRestPosition, rightHandRestRotation, 0.26f);
+    }
+
+    private void GetHandPoseForShell(Vector3 shellLocalPosition, Quaternion shellLocalRotation,
+        Vector3 desiredShellPosition, Quaternion desiredShellRotation,
+        out Vector3 handPosition, out Quaternion handRotation)
+    {
+        handRotation = desiredShellRotation * Quaternion.Inverse(shellLocalRotation);
+        var scaledLocalPosition = Vector3.Scale(shellLocalPosition, dealerRightHand.lossyScale);
+        handPosition = desiredShellPosition - handRotation * scaledLocalPosition;
+    }
+
+    private static IEnumerator MoveHandWorld(Transform hand, Vector3 targetPosition, Quaternion targetRotation, float duration, float lift)
+    {
+        var startPosition = hand.position;
+        var startRotation = hand.rotation;
+        hand.SetParent(null, true);
+        for (var t = 0f; t < duration; t += Time.deltaTime)
+        {
+            var progress = Mathf.SmoothStep(0f, 1f, t / duration);
+            hand.position = Vector3.Lerp(startPosition, targetPosition, progress) + Vector3.up * (Mathf.Sin(progress * Mathf.PI) * lift);
+            hand.rotation = Quaternion.Slerp(startRotation, targetRotation, progress);
+            yield return null;
+        }
+        hand.position = targetPosition;
+        hand.rotation = targetRotation;
+    }
+
+    private static IEnumerator MoveHandToRest(Transform hand, Transform restParent, Vector3 restPosition,
+        Quaternion restRotation, float duration)
+    {
+        var targetPosition = restParent.TransformPoint(restPosition);
+        var targetRotation = restParent.rotation * restRotation;
+        yield return MoveHandWorld(hand, targetPosition, targetRotation, duration, 0.025f);
+        hand.SetParent(restParent, false);
+        hand.localPosition = restPosition;
+        hand.localRotation = restRotation;
     }
 
     private IEnumerator ReturnDealerHands(float duration)

@@ -18,28 +18,52 @@ public sealed class ChamberScenePlayTests
         var pump = GameObject.Find("Reload").transform;
         var pumpRestPosition = pump.localPosition;
         var firstShell = GameObject.Find("Shotgun Shell 1 — Live").transform;
+        var loadingHand = GameObject.Find("Doll Right Hand").transform;
+        var supportHand = GameObject.Find("Doll Left Hand").transform;
+        var rearGrip = GameObject.Find("Apparition Right Grip").transform;
+        var foreGrip = GameObject.Find("Apparition Left Grip").transform;
+        var loadingHandRenderer = loadingHand.GetComponentInChildren<Renderer>();
+        var firstShellRenderer = firstShell.GetComponentInChildren<Renderer>();
         var shellStartPosition = firstShell.position;
         var tableBounds = CombinedBounds(GameObject.Find("Hero Duel Table — Wood Table 7"));
         Assert.That(shellStartPosition.x, Is.LessThan(tableBounds.min.x), "Opening shell does not start beside the duel table.");
 
-        yield return new WaitForSeconds(4.72f);
+        yield return new WaitForSeconds(4.58f);
         var maximumOpenTravel = 0f;
         var maximumShellTravel = 0f;
-        for (var elapsed = 0f; elapsed < 1.05f; elapsed += Time.deltaTime)
+        var minimumHandToShellDistance = float.MaxValue;
+        var shellMovedWithoutHand = false;
+        var bothHandsTookWeapon = false;
+        var shellMovedWithoutGunSupport = false;
+        for (var elapsed = 0f; elapsed < 2.85f; elapsed += Time.deltaTime)
         {
+            bothHandsTookWeapon |= loadingHand.parent == rearGrip && supportHand.parent == foreGrip;
             maximumOpenTravel = Mathf.Max(maximumOpenTravel, Vector3.Distance(pumpRestPosition, pump.localPosition));
             maximumShellTravel = Mathf.Max(maximumShellTravel, Vector3.Distance(shellStartPosition, firstShell.position));
+            if (firstShell.gameObject.activeSelf)
+            {
+                var handToShellDistance = Vector3.Distance(loadingHandRenderer.bounds.center, firstShellRenderer.bounds.center);
+                minimumHandToShellDistance = Mathf.Min(minimumHandToShellDistance, handToShellDistance);
+                if (Vector3.Distance(shellStartPosition, firstShell.position) > 0.03f && handToShellDistance > 0.14f)
+                    shellMovedWithoutHand = true;
+                if (Vector3.Distance(shellStartPosition, firstShell.position) > 0.03f && supportHand.parent != foreGrip)
+                    shellMovedWithoutGunSupport = true;
+            }
             yield return null;
         }
         Assert.That(maximumOpenTravel, Is.GreaterThan(0.018f), "The shotgun action was not visibly held open during loading.");
         Assert.That(maximumShellTravel, Is.GreaterThan(0.55f), "The first shell never travelled from the side stand to the open breech.");
+        Assert.That(minimumHandToShellDistance, Is.LessThan(0.07f), "The loading hand never grasped the first shell.");
+        Assert.That(shellMovedWithoutHand, Is.False, "The first shell moved without the loading hand holding it.");
+        Assert.That(bothHandsTookWeapon, Is.True, "The doll did not take the shotgun with both hands before opening it.");
+        Assert.That(shellMovedWithoutGunSupport, Is.False, "The supporting hand released the shotgun during loading.");
 
-        yield return new WaitForSeconds(8.1f);
+        yield return new WaitForSeconds(10.8f);
         foreach (var item in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include))
             if (item.name.StartsWith("Shotgun Shell ")) Assert.That(item.gameObject.activeSelf, Is.False, $"{item.name} was not loaded.");
         Assert.That(Vector3.Distance(pumpRestPosition, pump.localPosition), Is.LessThan(0.001f), "Shotgun did not close after the opening load.");
         Assert.That(game.enabled, Is.True);
-        Debug.Log($"[OpeningTransformTrace] pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m start={shellStartPosition}");
+        Debug.Log($"[OpeningTransformTrace] pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m handGrip={minimumHandToShellDistance:F3}m start={shellStartPosition}");
     }
 
     [UnityTest]
@@ -88,7 +112,10 @@ public sealed class ChamberScenePlayTests
         Assert.That(GameObject.Find("Hanging Body Bag — Back Left"), Is.Not.Null);
         Assert.That(GameObject.Find("Horror Bottles — Evidence Shelf"), Is.Not.Null);
         Assert.That(GameObject.Find("Apparition Red Focus"), Is.Not.Null);
-        Assert.That(GameObject.Find("Table Cold Focus"), Is.Not.Null);
+        var tableFocus = GameObject.Find("Table Cold Focus").GetComponent<Light>();
+        Assert.That(tableFocus, Is.Not.Null);
+        Assert.That(tableFocus.intensity, Is.GreaterThanOrEqualTo(2.1f), "The shotgun work light is too dim.");
+        Assert.That(tableFocus.spotAngle, Is.GreaterThanOrEqualTo(56f), "The shotgun work light is too narrow.");
         Assert.That(RenderSettings.ambientLight.maxColorComponent, Is.LessThan(0.002f), "The room ambient light is not black enough.");
         var mainMusic = (AudioSource)typeof(ChamberLogicGame).GetField("musicSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         var layeredMusic = GameObject.Find("Horror Music Layer").GetComponent<AudioSource>();
