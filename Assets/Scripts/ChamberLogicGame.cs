@@ -9,9 +9,13 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
     [Header("Authored scene references")]
     [SerializeField] private Transform playerWeapon;
-    [SerializeField] private Transform dealerCharacter;
-    [SerializeField] private Animator dealerAnimator;
-    [SerializeField] private DealerWeaponIK dealerWeaponIK;
+    [SerializeField] private Transform dealerEntity;
+    [SerializeField] private Transform dealerRightHand;
+    [SerializeField] private Transform dealerLeftHand;
+    [SerializeField] private Transform dealerRightGrip;
+    [SerializeField] private Transform dealerLeftGrip;
+    [SerializeField] private Transform dealerSelfRightGrip;
+    [SerializeField] private Transform dealerSelfLeftGrip;
     [SerializeField] private Transform weaponTableAnchor;
     [SerializeField] private Transform playerAimDealerAnchor;
     [SerializeField] private Transform playerAimSelfAnchor;
@@ -45,15 +49,23 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private bool introPlaying;
     private Vector3 cameraRestPosition;
     private Quaternion cameraRestRotation;
-    private Vector3 dealerRestPosition;
-    private Quaternion dealerRestRotation;
+    private Vector3 entityRestPosition;
+    private Quaternion entityRestRotation;
+    private Vector3 entityRestScale;
+    private Transform rightHandRestParent;
+    private Transform leftHandRestParent;
+    private Vector3 rightHandRestPosition;
+    private Vector3 leftHandRestPosition;
+    private Quaternion rightHandRestRotation;
+    private Quaternion leftHandRestRotation;
     private bool dealerActing;
     private Vector3 pumpRestPosition;
     private Quaternion pumpRestRotation;
 
     private void Awake()
     {
-        if (duelCamera == null || playerWeapon == null || dealerCharacter == null || dealerAnimator == null || dealerWeaponIK == null ||
+        if (duelCamera == null || playerWeapon == null || dealerEntity == null || dealerRightHand == null || dealerLeftHand == null ||
+            dealerRightGrip == null || dealerLeftGrip == null || dealerSelfRightGrip == null || dealerSelfLeftGrip == null ||
             weaponTableAnchor == null || playerAimDealerAnchor == null || playerAimSelfAnchor == null ||
             dealerAimPlayerAnchor == null || dealerAimSelfAnchor == null || weaponBreechAnchor == null || weaponPump == null ||
             audioSource == null || ambientSource == null || mechanicalSource == null || musicSource == null)
@@ -65,8 +77,15 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
         cameraRestPosition = duelCamera.localPosition;
         cameraRestRotation = duelCamera.localRotation;
-        dealerRestPosition = dealerCharacter.localPosition;
-        dealerRestRotation = dealerCharacter.localRotation;
+        entityRestPosition = dealerEntity.localPosition;
+        entityRestRotation = dealerEntity.localRotation;
+        entityRestScale = dealerEntity.localScale;
+        rightHandRestParent = dealerRightHand.parent;
+        leftHandRestParent = dealerLeftHand.parent;
+        rightHandRestPosition = dealerRightHand.localPosition;
+        leftHandRestPosition = dealerLeftHand.localPosition;
+        rightHandRestRotation = dealerRightHand.localRotation;
+        leftHandRestRotation = dealerLeftHand.localRotation;
         pumpRestPosition = weaponPump.localPosition;
         pumpRestRotation = weaponPump.localRotation;
         foreach (var shell in shellProps)
@@ -86,8 +105,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         musicSource.loop = true;
         musicSource.volume = 0.16f;
         musicSource.Play();
-        dealerAnimator.speed = 0.76f;
-        dealerAnimator.Play("Idle", 0, 0.18f);
         StartExperiment();
     }
 
@@ -98,9 +115,9 @@ public sealed class ChamberLogicGame : MonoBehaviour
         {
             var unstable = Mathf.PerlinNoise(time * 7.5f, 0.37f);
             var dropout = Mathf.PerlinNoise(time * 1.3f, 4.1f) > 0.91f ? 0.22f : 1f;
-            overheadLight.intensity = (4.6f + unstable * 1.5f) * dropout;
+            overheadLight.intensity = (1.15f + unstable * 0.72f) * dropout;
         }
-        if (dealerRimLight != null) dealerRimLight.intensity = 2.15f + Mathf.Sin(time * 0.72f) * 0.32f;
+        if (dealerRimLight != null) dealerRimLight.intensity = 2.65f + Mathf.Sin(time * 0.72f) * 0.42f;
 
         if (!introPlaying)
         {
@@ -108,10 +125,10 @@ public sealed class ChamberLogicGame : MonoBehaviour
             duelCamera.localRotation = cameraRestRotation * Quaternion.Euler(Mathf.Sin(time * 0.44f) * 0.18f, Mathf.Sin(time * 0.29f) * 0.22f, 0f);
         }
 
-        if (dealerCharacter != null && !dealerActing)
+        if (dealerEntity != null && !dealerActing)
         {
-            dealerCharacter.localPosition = dealerRestPosition;
-            dealerCharacter.localRotation = dealerRestRotation * Quaternion.Euler(0f, Mathf.Sin(time * 0.48f) * 1.1f, 0f);
+            dealerEntity.localPosition = entityRestPosition + Vector3.up * (Mathf.Sin(time * 0.72f) * 0.012f);
+            dealerEntity.localRotation = entityRestRotation * Quaternion.Euler(0f, Mathf.Sin(time * 0.48f) * 1.8f, 0f);
         }
 
         if (!introPlaying && !resolving && playerTurn && round != null)
@@ -134,10 +151,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
         report.Clear();
         report.Add("Round begins: 2 live and 4 blank shells.");
         dealerActing = false;
-        dealerWeaponIK.SetHolding(false);
-        dealerCharacter.localPosition = dealerRestPosition;
-        dealerCharacter.localRotation = dealerRestRotation;
-        dealerAnimator.CrossFade("Idle", 0.08f);
+        ResetDealerEntity();
+        ReleaseDealerHands();
         SetWeaponAt(weaponTableAnchor);
         ResetShellReveal();
         StartCoroutine(OpeningSequence());
@@ -258,9 +273,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
             if (dealerHealth <= 0)
             {
                 dealerActing = true;
-                dealerWeaponIK.SetHolding(false);
-                dealerAnimator.speed = 0.48f;
-                dealerAnimator.CrossFade("Death", 0.08f);
+                ReleaseDealerHands();
                 ApplyDealerDefeatedPose();
             }
         }
@@ -316,11 +329,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
         else
         {
             dealerActing = true;
-            dealerCharacter.localPosition = dealerRestPosition;
-            dealerCharacter.localRotation = dealerRestRotation;
-            dealerWeaponIK.SetHolding(true, targetsSelf);
-            dealerAnimator.speed = 0.88f;
-            dealerAnimator.CrossFade("Gun Hold", 0.18f);
+            ResetDealerEntity();
+            yield return MoveDealerHandsToWeapon(targetsSelf, 0.52f);
         }
 
         mechanicalSource.PlayOneShot(shellLoadClip, 0.46f);
@@ -328,7 +338,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         yield return PumpWeapon(isPlayer ? 0.34f : 0.42f);
         if (!isPlayer)
         {
-            dealerAnimator.CrossFade("Gun Point", 0.12f);
             yield return new WaitForSeconds(0.38f);
         }
         else
@@ -336,7 +345,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
             yield return new WaitForSeconds(0.22f);
         }
 
-        if (!isPlayer) dealerAnimator.CrossFade("Gun Fire", 0.04f);
         audioSource.PlayOneShot(live ? liveShotClip : blankClickClip, live ? 0.9f : 0.68f);
         if (live && muzzleFlash != null) muzzleFlash.intensity = 9f;
         var aimPosition = playerWeapon.position;
@@ -352,17 +360,12 @@ public sealed class ChamberLogicGame : MonoBehaviour
         if (dealerWasHit)
         {
             dealerActing = true;
-            dealerAnimator.speed = 1f;
-            dealerAnimator.CrossFade("Hit", 0.06f);
             yield return DealerHitReaction();
         }
 
         yield return MoveWeapon(weaponTableAnchor, 0.72f);
-        dealerAnimator.speed = 0.76f;
-        dealerAnimator.CrossFade("Idle", 0.16f);
-        dealerWeaponIK.SetHolding(false);
-        dealerCharacter.localPosition = dealerRestPosition;
-        dealerCharacter.localRotation = dealerRestRotation;
+        if (!isPlayer) yield return ReturnDealerHands(0.42f);
+        ResetDealerEntity();
         dealerActing = false;
     }
 
@@ -406,30 +409,108 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
     private IEnumerator DealerHitReaction()
     {
-        var hitPosition = dealerRestPosition + new Vector3(0f, 0.035f, 0.11f);
-        var hitRotation = dealerRestRotation * Quaternion.Euler(-14f, 0f, 0f);
+        var hitPosition = entityRestPosition + new Vector3(0f, 0.07f, 0.18f);
+        var hitRotation = entityRestRotation * Quaternion.Euler(-18f, 0f, 0f);
+        var hitScale = Vector3.Scale(entityRestScale, new Vector3(1.13f, 0.82f, 1.13f));
         for (var t = 0f; t < 0.16f; t += Time.deltaTime)
         {
             var progress = Mathf.SmoothStep(0f, 1f, t / 0.16f);
-            dealerCharacter.localPosition = Vector3.Lerp(dealerRestPosition, hitPosition, progress);
-            dealerCharacter.localRotation = Quaternion.Slerp(dealerRestRotation, hitRotation, progress);
+            dealerEntity.localPosition = Vector3.Lerp(entityRestPosition, hitPosition, progress);
+            dealerEntity.localRotation = Quaternion.Slerp(entityRestRotation, hitRotation, progress);
+            dealerEntity.localScale = Vector3.Lerp(entityRestScale, hitScale, progress);
             yield return null;
         }
         for (var t = 0f; t < 0.48f; t += Time.deltaTime)
         {
             var progress = Mathf.SmoothStep(0f, 1f, t / 0.48f);
-            dealerCharacter.localPosition = Vector3.Lerp(hitPosition, dealerRestPosition, progress);
-            dealerCharacter.localRotation = Quaternion.Slerp(hitRotation, dealerRestRotation, progress);
+            dealerEntity.localPosition = Vector3.Lerp(hitPosition, entityRestPosition, progress);
+            dealerEntity.localRotation = Quaternion.Slerp(hitRotation, entityRestRotation, progress);
+            dealerEntity.localScale = Vector3.Lerp(hitScale, entityRestScale, progress);
             yield return null;
         }
-        dealerCharacter.localPosition = dealerRestPosition;
-        dealerCharacter.localRotation = dealerRestRotation;
+        ResetDealerEntity();
     }
 
     private void ApplyDealerDefeatedPose()
     {
-        dealerCharacter.localPosition = dealerRestPosition + new Vector3(0f, 0.025f, 0.09f);
-        dealerCharacter.localRotation = dealerRestRotation * Quaternion.Euler(-12f, 0f, 0f);
+        dealerEntity.localPosition = entityRestPosition + new Vector3(0f, -0.12f, 0.14f);
+        dealerEntity.localRotation = entityRestRotation * Quaternion.Euler(-22f, 0f, 0f);
+        dealerEntity.localScale = Vector3.Scale(entityRestScale, new Vector3(1.18f, 0.65f, 1.18f));
+    }
+
+    private IEnumerator MoveDealerHandsToWeapon(bool targetsSelf, float duration)
+    {
+        var rightTarget = targetsSelf ? dealerSelfRightGrip : dealerRightGrip;
+        var leftTarget = targetsSelf ? dealerSelfLeftGrip : dealerLeftGrip;
+        var rightStartPosition = dealerRightHand.position;
+        var leftStartPosition = dealerLeftHand.position;
+        var rightStartRotation = dealerRightHand.rotation;
+        var leftStartRotation = dealerLeftHand.rotation;
+        dealerRightHand.SetParent(null, true);
+        dealerLeftHand.SetParent(null, true);
+
+        for (var t = 0f; t < duration; t += Time.deltaTime)
+        {
+            var progress = Mathf.SmoothStep(0f, 1f, t / duration);
+            var lift = Mathf.Sin(progress * Mathf.PI) * 0.07f;
+            dealerRightHand.position = Vector3.Lerp(rightStartPosition, rightTarget.position, progress) + Vector3.up * lift;
+            dealerLeftHand.position = Vector3.Lerp(leftStartPosition, leftTarget.position, progress) + Vector3.up * lift;
+            dealerRightHand.rotation = Quaternion.Slerp(rightStartRotation, rightTarget.rotation, progress);
+            dealerLeftHand.rotation = Quaternion.Slerp(leftStartRotation, leftTarget.rotation, progress);
+            yield return null;
+        }
+
+        AttachHand(dealerRightHand, rightTarget);
+        AttachHand(dealerLeftHand, leftTarget);
+    }
+
+    private IEnumerator ReturnDealerHands(float duration)
+    {
+        var rightStartPosition = dealerRightHand.position;
+        var leftStartPosition = dealerLeftHand.position;
+        var rightStartRotation = dealerRightHand.rotation;
+        var leftStartRotation = dealerLeftHand.rotation;
+        dealerRightHand.SetParent(null, true);
+        dealerLeftHand.SetParent(null, true);
+        var rightTargetPosition = rightHandRestParent.TransformPoint(rightHandRestPosition);
+        var leftTargetPosition = leftHandRestParent.TransformPoint(leftHandRestPosition);
+        var rightTargetRotation = rightHandRestParent.rotation * rightHandRestRotation;
+        var leftTargetRotation = leftHandRestParent.rotation * leftHandRestRotation;
+
+        for (var t = 0f; t < duration; t += Time.deltaTime)
+        {
+            var progress = Mathf.SmoothStep(0f, 1f, t / duration);
+            dealerRightHand.position = Vector3.Lerp(rightStartPosition, rightTargetPosition, progress);
+            dealerLeftHand.position = Vector3.Lerp(leftStartPosition, leftTargetPosition, progress);
+            dealerRightHand.rotation = Quaternion.Slerp(rightStartRotation, rightTargetRotation, progress);
+            dealerLeftHand.rotation = Quaternion.Slerp(leftStartRotation, leftTargetRotation, progress);
+            yield return null;
+        }
+        ReleaseDealerHands();
+    }
+
+    private static void AttachHand(Transform hand, Transform grip)
+    {
+        hand.SetParent(grip, false);
+        hand.localPosition = Vector3.zero;
+        hand.localRotation = Quaternion.identity;
+    }
+
+    private void ReleaseDealerHands()
+    {
+        dealerRightHand.SetParent(rightHandRestParent, false);
+        dealerRightHand.localPosition = rightHandRestPosition;
+        dealerRightHand.localRotation = rightHandRestRotation;
+        dealerLeftHand.SetParent(leftHandRestParent, false);
+        dealerLeftHand.localPosition = leftHandRestPosition;
+        dealerLeftHand.localRotation = leftHandRestRotation;
+    }
+
+    private void ResetDealerEntity()
+    {
+        dealerEntity.localPosition = entityRestPosition;
+        dealerEntity.localRotation = entityRestRotation;
+        dealerEntity.localScale = entityRestScale;
     }
 
     private IEnumerator CameraImpact()
