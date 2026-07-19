@@ -15,11 +15,9 @@ public sealed class ChamberPoseDebug : MonoBehaviour
     [SerializeField] private Transform dealerToPlayerPose;
     [SerializeField] private Transform dealerToSelfPose;
 
-    [Header("Targets and hands")]
+    [Header("Targets")]
     [SerializeField] private Transform dealerFace;
     [SerializeField] private Transform playerFace;
-    [SerializeField] private Transform playerLeftHand;
-    [SerializeField] private Transform playerRightHand;
 
     private void OnDrawGizmos()
     {
@@ -31,10 +29,6 @@ public sealed class ChamberPoseDebug : MonoBehaviour
         DrawPose(dealerToPlayerPose, playerFace, Color.red);
         DrawPose(dealerToSelfPose, dealerFace, Color.magenta);
 
-        Gizmos.color = Color.cyan;
-        Gizmos.DrawWireSphere(playerLeftHand.position, 0.035f);
-        Gizmos.DrawWireSphere(playerRightHand.position, 0.035f);
-        Gizmos.DrawLine(playerLeftHand.position, playerRightHand.position);
     }
 
     [ContextMenu("Log pose audit")]
@@ -51,7 +45,6 @@ public sealed class ChamberPoseDebug : MonoBehaviour
         LogPose("PLAYER -> SELF", playerToSelfPose, playerFace);
         LogPose("DEALER -> PLAYER", dealerToPlayerPose, playerFace);
         LogPose("DEALER -> SELF", dealerToSelfPose, dealerFace);
-        Debug.Log($"[PoseAudit] hands left={Format(playerLeftHand.position)} right={Format(playerRightHand.position)} separation={Vector3.Distance(playerLeftHand.position, playerRightHand.position):F3}m", this);
     }
 
     private bool Ready()
@@ -59,8 +52,7 @@ public sealed class ChamberPoseDebug : MonoBehaviour
         return weapon != null && muzzle != null && rearGrip != null && foreGrip != null && tablePose != null &&
                playerToDealerPose != null && playerToSelfPose != null &&
                dealerToPlayerPose != null && dealerToSelfPose != null &&
-               dealerFace != null && playerFace != null &&
-               playerLeftHand != null && playerRightHand != null;
+               dealerFace != null && playerFace != null;
     }
 
     private void DrawPose(Transform pose, Transform target, Color color)

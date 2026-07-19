@@ -16,12 +16,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
     [SerializeField] private Transform playerAimSelfAnchor;
     [SerializeField] private Transform dealerAimPlayerAnchor;
     [SerializeField] private Transform dealerAimSelfAnchor;
-    [SerializeField] private Transform playerHandsRig;
-    [SerializeField] private Transform playerLeftHand;
-    [SerializeField] private Transform playerRightHand;
     [SerializeField] private Transform weaponBreechAnchor;
-    [SerializeField] private Transform weaponRearGripAnchor;
-    [SerializeField] private Transform weaponForeGripAnchor;
     [SerializeField] private Transform duelCamera;
     [SerializeField] private Light muzzleFlash;
     [SerializeField] private Light overheadLight;
@@ -48,19 +43,15 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private bool introPlaying;
     private Vector3 cameraRestPosition;
     private Quaternion cameraRestRotation;
-    private Vector3 handsRestPosition;
-    private Quaternion handsRestRotation;
-    private Vector3 leftHandRestPosition;
-    private Vector3 rightHandRestPosition;
+    private Vector3 dealerRestPosition;
+    private Quaternion dealerRestRotation;
     private bool dealerActing;
 
     private void Awake()
     {
         if (duelCamera == null || playerWeapon == null || dealerCharacter == null || dealerAnimator == null ||
             weaponTableAnchor == null || playerAimDealerAnchor == null || playerAimSelfAnchor == null ||
-            dealerAimPlayerAnchor == null || dealerAimSelfAnchor == null || playerHandsRig == null ||
-            playerLeftHand == null || playerRightHand == null || weaponBreechAnchor == null ||
-            weaponRearGripAnchor == null || weaponForeGripAnchor == null ||
+            dealerAimPlayerAnchor == null || dealerAimSelfAnchor == null || weaponBreechAnchor == null ||
             audioSource == null || ambientSource == null || mechanicalSource == null || musicSource == null)
         {
             Debug.LogError("Chamber scene references are incomplete. The saved Chamber scene needs repair.");
@@ -70,10 +61,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
         cameraRestPosition = duelCamera.localPosition;
         cameraRestRotation = duelCamera.localRotation;
-        handsRestPosition = playerHandsRig.localPosition;
-        handsRestRotation = playerHandsRig.localRotation;
-        leftHandRestPosition = playerLeftHand.localPosition;
-        rightHandRestPosition = playerRightHand.localPosition;
+        dealerRestPosition = dealerCharacter.localPosition;
+        dealerRestRotation = dealerCharacter.localRotation;
         foreach (var shell in shellProps)
         {
             shellRestPositions.Add(shell.transform.localPosition);
@@ -113,8 +102,13 @@ public sealed class ChamberLogicGame : MonoBehaviour
             duelCamera.localRotation = cameraRestRotation * Quaternion.Euler(Mathf.Sin(time * 0.44f) * 0.18f, Mathf.Sin(time * 0.29f) * 0.22f, 0f);
         }
 
-        if (dealerCharacter != null && !dealerActing)
-            dealerCharacter.localRotation = Quaternion.Euler(0f, 180f + Mathf.Sin(time * 0.48f) * 1.1f, Mathf.Sin(time * 0.31f) * 0.35f);
+        if (dealerCharacter != null)
+        {
+            dealerCharacter.localPosition = dealerRestPosition;
+            dealerCharacter.localRotation = dealerActing
+                ? dealerRestRotation
+                : dealerRestRotation * Quaternion.Euler(0f, Mathf.Sin(time * 0.48f) * 1.1f, 0f);
+        }
 
         if (!introPlaying && !resolving && playerTurn && round != null)
         {
@@ -136,9 +130,10 @@ public sealed class ChamberLogicGame : MonoBehaviour
         report.Clear();
         report.Add("Round begins: 2 live and 4 blank shells.");
         dealerActing = false;
+        dealerCharacter.localPosition = dealerRestPosition;
+        dealerCharacter.localRotation = dealerRestRotation;
         dealerAnimator.CrossFade("Idle", 0.08f);
         SetWeaponAt(weaponTableAnchor);
-        ResetPlayerHands();
         ResetShellReveal();
         StartCoroutine(OpeningSequence());
     }
@@ -256,7 +251,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
             if (dealerHealth <= 0)
             {
                 dealerActing = true;
-                dealerAnimator.speed = 0.82f;
+                dealerAnimator.speed = 0.48f;
                 dealerAnimator.CrossFade("Death", 0.08f);
             }
         }
@@ -307,7 +302,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
         if (isPlayer)
         {
-            yield return MovePlayerHands(true, targetsSelf, 0.42f);
+            yield return new WaitForSeconds(0.22f);
         }
         else
         {
@@ -346,13 +341,10 @@ public sealed class ChamberLogicGame : MonoBehaviour
             dealerActing = true;
             dealerAnimator.speed = 1f;
             dealerAnimator.CrossFade("Hit", 0.06f);
-            var hitRotation = dealerCharacter.localRotation * Quaternion.Euler(-7f, 0f, isPlayer ? -5f : 5f);
-            dealerCharacter.localRotation = hitRotation;
             yield return new WaitForSeconds(0.48f);
         }
 
         yield return MoveWeapon(weaponTableAnchor, 0.72f);
-        if (isPlayer) yield return MovePlayerHands(false, false, 0.38f);
         dealerAnimator.speed = 0.76f;
         dealerAnimator.CrossFade("Idle", 0.16f);
         dealerActing = false;
@@ -371,38 +363,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
             yield return null;
         }
         SetWeaponAt(destination);
-    }
-
-    private IEnumerator MovePlayerHands(bool reaching, bool targetsSelf, float duration)
-    {
-        var positionFrom = playerHandsRig.localPosition;
-        var rotationFrom = playerHandsRig.localRotation;
-        var leftFrom = playerLeftHand.localPosition;
-        var rightFrom = playerRightHand.localPosition;
-        var positionTo = handsRestPosition;
-        var rotationTo = handsRestRotation;
-        var aimPose = targetsSelf ? playerAimSelfAnchor : playerAimDealerAnchor;
-        var leftTo = reaching
-            ? playerLeftHand.parent.InverseTransformPoint(WeaponPointAtPose(weaponForeGripAnchor, aimPose))
-            : leftHandRestPosition;
-        var rightTo = reaching
-            ? playerRightHand.parent.InverseTransformPoint(WeaponPointAtPose(weaponRearGripAnchor, aimPose))
-            : rightHandRestPosition;
-        for (var t = 0f; t < duration; t += Time.deltaTime)
-        {
-            var progress = Mathf.SmoothStep(0f, 1f, t / duration);
-            playerHandsRig.localPosition = Vector3.Lerp(positionFrom, positionTo, progress);
-            playerHandsRig.localRotation = Quaternion.Slerp(rotationFrom, rotationTo, progress);
-            playerLeftHand.localPosition = Vector3.Lerp(leftFrom, leftTo, progress);
-            playerRightHand.localPosition = Vector3.Lerp(rightFrom, rightTo, progress);
-            yield return null;
-        }
-    }
-
-    private Vector3 WeaponPointAtPose(Transform weaponPoint, Transform pose)
-    {
-        var localPoint = Vector3.Scale(playerWeapon.InverseTransformPoint(weaponPoint.position), playerWeapon.localScale);
-        return pose.TransformPoint(localPoint);
     }
 
     private IEnumerator CameraImpact()
@@ -425,14 +385,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         playerWeapon.SetParent(anchor, true);
         playerWeapon.localPosition = Vector3.zero;
         playerWeapon.localRotation = Quaternion.identity;
-    }
-
-    private void ResetPlayerHands()
-    {
-        playerHandsRig.localPosition = handsRestPosition;
-        playerHandsRig.localRotation = handsRestRotation;
-        playerLeftHand.localPosition = leftHandRestPosition;
-        playerRightHand.localPosition = rightHandRestPosition;
     }
 
     private static AudioClip CreateShotClip(string name, float duration, bool live)
