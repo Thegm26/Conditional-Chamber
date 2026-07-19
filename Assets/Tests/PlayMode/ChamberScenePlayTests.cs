@@ -22,8 +22,11 @@ public sealed class ChamberScenePlayTests
         Assert.That(GameObject.Find("The House — Dealer Character"), Is.Not.Null);
         Assert.That(GameObject.Find("Left Security Watcher"), Is.Null);
         Assert.That(GameObject.Find("Right Security Watcher"), Is.Null);
-        Assert.That(GameObject.Find("Duel Table — Imported Furniture Set"), Is.Not.Null);
-        Assert.That(GameObject.Find("Imported Walnut Duel Table"), Is.Not.Null);
+        Assert.That(GameObject.Find("Duel Furniture — Matching Wood Set"), Is.Not.Null);
+        Assert.That(GameObject.Find("Hero Duel Table — Wood Table 7"), Is.Not.Null);
+        Assert.That(GameObject.Find("Dealer Chair — Matching Wood Chair 4"), Is.Not.Null);
+        Assert.That(GameObject.Find("Player Chair — Matching Wood Chair 4"), Is.Not.Null);
+        Assert.That(GameObject.Find("Imported Walnut Duel Table"), Is.Null, "The stretched placeholder table should be removed.");
         Assert.That(GameObject.Find("Imported Shell Side Table"), Is.Not.Null);
         Assert.That(GameObject.Find("Player Hands Rig"), Is.Null, "Player hands should be removed from the authored scene.");
         Assert.That(GameObject.Find("Player Left Hand"), Is.Null);
@@ -62,13 +65,24 @@ public sealed class ChamberScenePlayTests
             Assert.That(viewport.y, Is.InRange(0.05f, 0.95f), "Part of the table shotgun is outside the vertical camera frame.");
         }
 
-        var table = GameObject.Find("Imported Walnut Duel Table");
+        var table = GameObject.Find("Hero Duel Table — Wood Table 7");
         var tableBounds = CombinedBounds(table);
-        Assert.That(tableBounds.min.y, Is.EqualTo(0f).Within(0.025f), "Table legs do not meet the floor.");
-        Assert.That(tableBounds.max.y, Is.InRange(0.80f, 1.05f), "Tabletop height is implausible.");
-        Assert.That(tableBounds.size.x, Is.InRange(1.8f, 2.6f));
-        Assert.That(tableBounds.size.z, Is.InRange(1.1f, 1.6f));
+        Assert.That(tableBounds.min.y, Is.EqualTo(0f).Within(0.002f), "Table legs do not meet the floor.");
+        Assert.That(tableBounds.max.y, Is.InRange(0.82f, 0.90f), "Tabletop height is implausible.");
+        Assert.That(tableBounds.size.x, Is.InRange(1.65f, 1.71f));
+        Assert.That(tableBounds.size.z, Is.InRange(1.14f, 1.20f));
+        AssertUniformScale(table.transform, 0.84f, "duel table");
+        foreach (var renderer in table.GetComponentsInChildren<Renderer>())
+            foreach (var material in renderer.sharedMaterials) Assert.That(material.name, Is.EqualTo("WoodFurniture_DarkOak"));
+        var dealerChair = GameObject.Find("Dealer Chair — Matching Wood Chair 4");
+        var playerChair = GameObject.Find("Player Chair — Matching Wood Chair 4");
+        AssertUniformScale(dealerChair.transform, 0.70f, "dealer chair");
+        AssertUniformScale(playerChair.transform, 0.70f, "player chair");
+        Assert.That(CombinedBounds(dealerChair).min.y, Is.EqualTo(0f).Within(0.002f));
+        Assert.That(CombinedBounds(playerChair).min.y, Is.EqualTo(0f).Within(0.002f));
         Assert.That(gunBounds.min.y - tableBounds.max.y, Is.InRange(0.005f, 0.06f), "Shotgun intersects or floats above the tabletop.");
+        Assert.That(gunBounds.center.x, Is.EqualTo(tableBounds.center.x).Within(0.002f), "Shotgun is not centered across the new table.");
+        Assert.That(gunBounds.center.z, Is.EqualTo(tableBounds.center.z).Within(0.002f), "Shotgun is not centered along the new table.");
         Assert.That(gunBounds.min.x, Is.GreaterThan(tableBounds.min.x));
         Assert.That(gunBounds.max.x, Is.LessThan(tableBounds.max.x));
         Assert.That(gunBounds.min.z, Is.GreaterThan(tableBounds.min.z));
@@ -206,5 +220,12 @@ public sealed class ChamberScenePlayTests
             new Vector3(max.x, min.y, min.z), new Vector3(max.x, min.y, max.z),
             new Vector3(max.x, max.y, min.z), new Vector3(max.x, max.y, max.z)
         };
+    }
+
+    private static void AssertUniformScale(Transform item, float expected, string label)
+    {
+        Assert.That(item.localScale.x, Is.EqualTo(expected).Within(0.0001f), $"{label} X scale is wrong.");
+        Assert.That(item.localScale.y, Is.EqualTo(expected).Within(0.0001f), $"{label} Y scale is wrong.");
+        Assert.That(item.localScale.z, Is.EqualTo(expected).Within(0.0001f), $"{label} Z scale is wrong.");
     }
 }
