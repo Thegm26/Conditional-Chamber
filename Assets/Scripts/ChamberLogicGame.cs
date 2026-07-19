@@ -501,12 +501,12 @@ public sealed class ChamberLogicGame : MonoBehaviour
         dollVoiceSource.pitch = selfInflicted ? 0.82f : 0.72f;
         dollVoiceSource.PlayOneShot(dollVoiceClip, 0.58f);
         var fallenPosition = entityRestPosition + (selfInflicted
-            ? new Vector3(0.22f, -0.19f, 0.06f)
-            : new Vector3(0f, -0.14f, 0.29f));
+            ? new Vector3(0.08f, -0.34f, 0.02f)
+            : new Vector3(0f, -0.32f, 0.06f));
         var fallenRotation = entityRestRotation * (selfInflicted
-            ? Quaternion.Euler(-8f, 0f, -67f)
-            : Quaternion.Euler(-61f, 0f, 0f));
-        const float fallDuration = 0.42f;
+            ? Quaternion.Euler(-6f, 0f, -12f)
+            : Quaternion.Euler(-10f, 0f, 0f));
+        const float fallDuration = 0.28f;
         for (var t = 0f; t < fallDuration; t += Time.deltaTime)
         {
             var progress = Mathf.SmoothStep(0f, 1f, t / fallDuration);
@@ -518,9 +518,9 @@ public sealed class ChamberLogicGame : MonoBehaviour
         dealerEntity.localRotation = fallenRotation;
         dollVoiceSource.pitch = 0.9f;
         dollVoiceSource.PlayOneShot(dollFallClip, 0.68f);
-        yield return new WaitForSeconds(0.44f);
+        yield return new WaitForSeconds(2.5f);
 
-        const float recoveryDuration = 0.64f;
+        const float recoveryDuration = 0.55f;
         for (var t = 0f; t < recoveryDuration; t += Time.deltaTime)
         {
             var progress = Mathf.SmoothStep(0f, 1f, t / recoveryDuration);
@@ -534,11 +534,11 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private void ApplyDealerDefeatedPose()
     {
         dealerEntity.localPosition = entityRestPosition + (lastDealerHitWasSelfInflicted
-            ? new Vector3(0.22f, -0.19f, 0.06f)
-            : new Vector3(0f, -0.14f, 0.29f));
+            ? new Vector3(0.08f, -0.34f, 0.02f)
+            : new Vector3(0f, -0.32f, 0.06f));
         dealerEntity.localRotation = entityRestRotation * (lastDealerHitWasSelfInflicted
-            ? Quaternion.Euler(-8f, 0f, -67f)
-            : Quaternion.Euler(-61f, 0f, 0f));
+            ? Quaternion.Euler(-6f, 0f, -12f)
+            : Quaternion.Euler(-10f, 0f, 0f));
     }
 
     private IEnumerator MoveDealerHandsToWeapon(bool targetsSelf, float duration)

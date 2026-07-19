@@ -233,6 +233,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(Vector3.Angle(leftHand.up, muzzle.forward), Is.InRange(75f, 105f), "Fore hand is not wrapped across the fore-end.");
         var camera = GameObject.Find("Duel Camera").transform;
         Assert.That(Vector3.Angle(muzzle.forward, camera.position - muzzle.position), Is.LessThan(1f), "Apparition aim misses the player camera.");
+        Assert.That(muzzle.position.x, Is.LessThan(-0.35f), "Player-facing shotgun is not held to the doll's side.");
+        Assert.That(muzzle.position.y, Is.InRange(0.97f, 1.07f), "Player-facing shotgun is not held low enough.");
         yield return new WaitForSeconds(2.5f);
         Assert.That(CurrentRound(game).RemainingTotal, Is.LessThan(6));
         Assert.That(rightHand.parent, Is.EqualTo(handRest));
@@ -247,7 +249,9 @@ public sealed class ChamberScenePlayTests
         var selfLeftGrip = GameObject.Find("Apparition Self Left Grip").transform;
         Assert.That(Vector3.Distance(rightHand.position, selfRightGrip.position), Is.LessThan(0.001f));
         Assert.That(Vector3.Distance(leftHand.position, selfLeftGrip.position), Is.LessThan(0.001f));
-        Assert.That(Vector3.Distance(muzzle.position, face.position), Is.GreaterThan(0.18f), "Self-aim muzzle intersects the apparition.");
+        Assert.That(muzzle.position.x - face.position.x, Is.InRange(0.29f, 0.35f), "Self-aim muzzle is not beside the doll's head.");
+        Assert.That(Mathf.Abs(muzzle.position.y - face.position.y), Is.LessThan(0.025f));
+        Assert.That(Mathf.Abs(muzzle.position.z - face.position.z), Is.LessThan(0.04f));
         Assert.That(Vector3.Angle(muzzle.forward, face.position - muzzle.position), Is.LessThan(1f), "Self-aim misses the apparition face point.");
 
         ResetRound(game);
@@ -261,21 +265,27 @@ public sealed class ChamberScenePlayTests
         var maximumTilt = 0f;
         var maximumBackwardOffset = 0f;
         var maximumLateralOffset = 0f;
+        var maximumDownwardOffset = 0f;
+        var downHoldTime = 0f;
         var voicePlayed = false;
         var voiceSource = GameObject.Find("Doll Voice Source").GetComponent<AudioSource>();
-        for (var elapsed = 0f; elapsed < 4.35f; elapsed += Time.deltaTime)
+        for (var elapsed = 0f; elapsed < 6.1f; elapsed += Time.deltaTime)
         {
             maximumOffset = Mathf.Max(maximumOffset, Vector3.Distance(entityRestPosition, apparition.transform.localPosition));
             maximumTilt = Mathf.Max(maximumTilt, Vector3.Angle(Vector3.up, apparition.transform.up));
             maximumBackwardOffset = Mathf.Max(maximumBackwardOffset, apparition.transform.localPosition.z - entityRestPosition.z);
             maximumLateralOffset = Mathf.Max(maximumLateralOffset, Mathf.Abs(apparition.transform.localPosition.x - entityRestPosition.x));
+            maximumDownwardOffset = Mathf.Max(maximumDownwardOffset, entityRestPosition.y - apparition.transform.localPosition.y);
+            if (entityRestPosition.y - apparition.transform.localPosition.y > 0.28f) downHoldTime += Time.deltaTime;
             voicePlayed |= voiceSource.isPlaying;
             yield return null;
         }
-        Assert.That(maximumOffset, Is.InRange(0.30f, 0.34f), "The player-shot doll does not fall backward far enough.");
-        Assert.That(maximumTilt, Is.InRange(59f, 63f));
-        Assert.That(maximumBackwardOffset, Is.GreaterThan(0.27f));
+        Assert.That(maximumOffset, Is.InRange(0.31f, 0.34f), "The player-shot doll does not drop far enough.");
+        Assert.That(maximumDownwardOffset, Is.GreaterThan(0.30f));
+        Assert.That(maximumTilt, Is.LessThan(15f), "The player-shot doll swings instead of dropping.");
+        Assert.That(maximumBackwardOffset, Is.InRange(0.05f, 0.08f));
         Assert.That(maximumLateralOffset, Is.LessThan(0.03f));
+        Assert.That(downHoldTime, Is.InRange(2.35f, 2.9f), "The doll does not remain down for roughly 2.5 seconds.");
         Assert.That(voicePlayed, Is.True, "The doll did not vocalize when shot.");
         Assert.That(Vector3.Distance(entityRestPosition, apparition.transform.localPosition), Is.LessThan(0.002f), "The surviving doll did not return to its fixed seat.");
 
@@ -284,17 +294,24 @@ public sealed class ChamberScenePlayTests
         var maximumSideOffset = 0f;
         var selfShotBackwardOffset = 0f;
         var selfShotTilt = 0f;
-        for (var elapsed = 0f; elapsed < 5.35f; elapsed += Time.deltaTime)
+        var selfShotDownwardOffset = 0f;
+        var selfDownHoldTime = 0f;
+        for (var elapsed = 0f; elapsed < 7.25f; elapsed += Time.deltaTime)
         {
             maximumSideOffset = Mathf.Max(maximumSideOffset, Mathf.Abs(apparition.transform.localPosition.x - entityRestPosition.x));
             selfShotBackwardOffset = Mathf.Max(selfShotBackwardOffset, apparition.transform.localPosition.z - entityRestPosition.z);
             selfShotTilt = Mathf.Max(selfShotTilt, Vector3.Angle(Vector3.up, apparition.transform.up));
+            selfShotDownwardOffset = Mathf.Max(selfShotDownwardOffset, entityRestPosition.y - apparition.transform.localPosition.y);
+            if (entityRestPosition.y - apparition.transform.localPosition.y > 0.30f) selfDownHoldTime += Time.deltaTime;
             yield return null;
         }
-        Assert.That(maximumSideOffset, Is.GreaterThan(0.20f), "The self-shot doll did not fall sideways.");
-        Assert.That(selfShotBackwardOffset, Is.LessThan(0.09f), "The self-shot reaction incorrectly reused the backward fall.");
-        Assert.That(selfShotTilt, Is.InRange(65f, 70f));
-        Debug.Log($"[DollTransformTrace] backOffset={maximumBackwardOffset:F4}m backTilt={maximumTilt:F2}deg sideOffset={maximumSideOffset:F4}m sideTilt={selfShotTilt:F2}deg");
+        Assert.That(maximumSideOffset, Is.InRange(0.07f, 0.10f));
+        Assert.That(selfShotBackwardOffset, Is.LessThan(0.04f));
+        Assert.That(selfShotDownwardOffset, Is.GreaterThan(0.32f));
+        Assert.That(selfShotTilt, Is.LessThan(18f), "The self-shot doll swings instead of dropping.");
+        Assert.That(selfDownHoldTime, Is.InRange(2.35f, 2.9f));
+        Assert.That(Vector3.Distance(entityRestPosition, apparition.transform.localPosition), Is.LessThan(0.002f));
+        Debug.Log($"[DollTransformTrace] playerDown={maximumDownwardOffset:F3}m playerTilt={maximumTilt:F2}deg playerHold={downHoldTime:F2}s selfDown={selfShotDownwardOffset:F3}m selfTilt={selfShotTilt:F2}deg selfHold={selfDownHoldTime:F2}s");
     }
 
     private static void ResetRound(ChamberLogicGame game)
