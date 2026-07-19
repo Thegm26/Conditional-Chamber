@@ -31,6 +31,9 @@ public sealed class ChamberLogicGame : MonoBehaviour
     [SerializeField] private AudioSource ambientSource;
     [SerializeField] private AudioSource mechanicalSource;
     [SerializeField] private AudioSource musicSource;
+    [SerializeField] private AudioSource musicLayerSource;
+    [SerializeField] private AudioClip horrorMusicClip;
+    [SerializeField] private AudioClip horrorMusicLayerClip;
     [SerializeField] private TextMesh roundRevealText;
     [SerializeField] private List<GameObject> shellProps = new List<GameObject>();
 
@@ -68,7 +71,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
             dealerRightGrip == null || dealerLeftGrip == null || dealerSelfRightGrip == null || dealerSelfLeftGrip == null ||
             weaponTableAnchor == null || playerAimDealerAnchor == null || playerAimSelfAnchor == null ||
             dealerAimPlayerAnchor == null || dealerAimSelfAnchor == null || weaponBreechAnchor == null || weaponPump == null ||
-            audioSource == null || ambientSource == null || mechanicalSource == null || musicSource == null)
+            audioSource == null || ambientSource == null || mechanicalSource == null || musicSource == null || musicLayerSource == null ||
+            horrorMusicClip == null || horrorMusicLayerClip == null)
         {
             Debug.LogError("Chamber scene references are incomplete. The saved Chamber scene needs repair.");
             enabled = false;
@@ -101,10 +105,14 @@ public sealed class ChamberLogicGame : MonoBehaviour
         ambientSource.loop = true;
         ambientSource.volume = 0.28f;
         ambientSource.Play();
-        musicSource.clip = CreateHorrorMusicClip();
+        musicSource.clip = horrorMusicClip;
         musicSource.loop = true;
-        musicSource.volume = 0.16f;
+        musicSource.volume = 0.24f;
         musicSource.Play();
+        musicLayerSource.clip = horrorMusicLayerClip;
+        musicLayerSource.loop = true;
+        musicLayerSource.volume = 0.14f;
+        musicLayerSource.Play();
         StartExperiment();
     }
 
@@ -154,6 +162,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
         ResetDealerEntity();
         ReleaseDealerHands();
         SetWeaponAt(weaponTableAnchor);
+        weaponPump.localPosition = pumpRestPosition;
+        weaponPump.localRotation = pumpRestRotation;
         ResetShellReveal();
         StartCoroutine(OpeningSequence());
     }
@@ -170,8 +180,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
         yield return new WaitForSeconds(1.35f);
 
-        var closePosition = new Vector3(0f, 1.48f, -0.72f);
-        var closeRotation = Quaternion.LookRotation(new Vector3(0f, 1.02f, 0.35f) - closePosition);
+        var closePosition = new Vector3(-0.48f, 1.36f, -0.92f);
+        var closeRotation = Quaternion.LookRotation(new Vector3(-0.58f, 0.86f, 0.02f) - closePosition);
         yield return MoveCamera(cameraRestPosition, cameraRestRotation, closePosition, closeRotation, 1f);
 
         if (roundRevealText != null)
@@ -181,6 +191,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
         }
         Debug.Log("[Chamber] Loading reveal: 2 live shells and 4 blank shells. Their order is hidden.");
         yield return new WaitForSeconds(1.8f);
+        yield return OpenWeaponAction(0.62f);
+        yield return new WaitForSeconds(0.24f);
 
         for (var i = 0; i < shellProps.Count; i++)
         {
@@ -189,18 +201,26 @@ public sealed class ChamberLogicGame : MonoBehaviour
             var start = shell.transform.position;
             var startRotation = shell.transform.rotation;
             mechanicalSource.PlayOneShot(shellLoadClip, 0.52f);
-            for (var t = 0f; t < 0.38f; t += Time.deltaTime)
+            var approach = weaponBreechAnchor.position + Vector3.down * 0.115f;
+            for (var t = 0f; t < 0.32f; t += Time.deltaTime)
             {
-                var progress = Mathf.SmoothStep(0f, 1f, t / 0.38f);
-                shell.transform.position = Vector3.Lerp(start, weaponBreechAnchor.position, progress) + Vector3.up * Mathf.Sin(progress * Mathf.PI) * 0.08f;
+                var progress = Mathf.SmoothStep(0f, 1f, t / 0.32f);
+                shell.transform.position = Vector3.Lerp(start, approach, progress) + Vector3.up * Mathf.Sin(progress * Mathf.PI) * 0.10f;
                 shell.transform.rotation = Quaternion.Slerp(startRotation, weaponBreechAnchor.rotation, progress);
                 yield return null;
             }
+            for (var t = 0f; t < 0.18f; t += Time.deltaTime)
+            {
+                var progress = Mathf.SmoothStep(0f, 1f, t / 0.18f);
+                shell.transform.position = Vector3.Lerp(approach, weaponBreechAnchor.position, progress);
+                shell.transform.rotation = weaponBreechAnchor.rotation;
+                yield return null;
+            }
             shell.SetActive(false);
-            yield return new WaitForSeconds(0.3f);
+            yield return new WaitForSeconds(0.22f);
         }
 
-        yield return PumpWeapon(0.52f);
+        yield return CloseWeaponAction(0.58f);
 
         if (roundRevealText != null) roundRevealText.text = "REMEMBER THE MIX\nP(LIVE NEXT) = 2 / 6";
         yield return new WaitForSeconds(2.2f);
@@ -324,6 +344,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
         if (isPlayer)
         {
+            dealerActing = true;
+            ResetDealerEntity();
             yield return new WaitForSeconds(0.22f);
         }
         else
@@ -386,7 +408,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
     private IEnumerator PumpWeapon(float duration)
     {
-        var backPosition = pumpRestPosition + Vector3.down * 0.009f;
+        var backPosition = pumpRestPosition + Vector3.down * 0.022f;
         var backDuration = duration * 0.46f;
         mechanicalSource.PlayOneShot(shellLoadClip, 0.62f);
         for (var t = 0f; t < backDuration; t += Time.deltaTime)
@@ -405,6 +427,34 @@ public sealed class ChamberLogicGame : MonoBehaviour
         }
         weaponPump.localPosition = pumpRestPosition;
         weaponPump.localRotation = pumpRestRotation;
+    }
+
+    private IEnumerator OpenWeaponAction(float duration)
+    {
+        mechanicalSource.PlayOneShot(shellLoadClip, 0.76f);
+        yield return MoveWeaponAction(pumpRestPosition, pumpRestRotation,
+            pumpRestPosition + Vector3.down * 0.022f,
+            pumpRestRotation * Quaternion.Euler(6f, 0f, 0f), duration);
+    }
+
+    private IEnumerator CloseWeaponAction(float duration)
+    {
+        mechanicalSource.PlayOneShot(shellLoadClip, 0.82f);
+        yield return MoveWeaponAction(weaponPump.localPosition, weaponPump.localRotation,
+            pumpRestPosition, pumpRestRotation, duration);
+    }
+
+    private IEnumerator MoveWeaponAction(Vector3 startPosition, Quaternion startRotation, Vector3 endPosition, Quaternion endRotation, float duration)
+    {
+        for (var t = 0f; t < duration; t += Time.deltaTime)
+        {
+            var progress = Mathf.SmoothStep(0f, 1f, t / duration);
+            weaponPump.localPosition = Vector3.Lerp(startPosition, endPosition, progress);
+            weaponPump.localRotation = Quaternion.Slerp(startRotation, endRotation, progress);
+            yield return null;
+        }
+        weaponPump.localPosition = endPosition;
+        weaponPump.localRotation = endRotation;
     }
 
     private IEnumerator DealerHitReaction()
@@ -611,32 +661,4 @@ public sealed class ChamberLogicGame : MonoBehaviour
         return clip;
     }
 
-    private static AudioClip CreateHorrorMusicClip()
-    {
-        const int sampleRate = 22050;
-        const int seconds = 32;
-        var frames = sampleRate * seconds;
-        var samples = new float[frames * 2];
-        var notes = new[] { 73.42f, 77.78f, 87.31f, 82.41f }; // D, Eb, F, E: a restrained Phrygian loop.
-        for (var i = 0; i < frames; i++)
-        {
-            var time = (float)i / sampleRate;
-            var bar = Mathf.FloorToInt(time / 8f) % notes.Length;
-            var root = notes[bar];
-            var slowSwell = 0.32f + Mathf.Pow(Mathf.Sin(time * Mathf.PI / 8f), 2f) * 0.68f;
-            var low = Mathf.Sin(time * Mathf.PI * 2f * root * 0.5f) * 0.18f;
-            var fifth = Mathf.Sin(time * Mathf.PI * 2f * root * 0.75f + 0.7f) * 0.07f;
-            var dissonance = Mathf.Sin(time * Mathf.PI * 2f * (root + 1.35f)) * 0.035f;
-            var bellPhase = time % 8f;
-            var bell = bellPhase < 2.4f
-                ? Mathf.Sin(bellPhase * Mathf.PI * 2f * root * 2f) * Mathf.Exp(-bellPhase * 1.7f) * 0.13f
-                : 0f;
-            var value = (low + fifth + dissonance) * slowSwell + bell;
-            samples[i * 2] = value * (0.92f + Mathf.Sin(time * 0.21f) * 0.08f);
-            samples[i * 2 + 1] = value * (0.92f + Mathf.Sin(time * 0.19f + 1.8f) * 0.08f);
-        }
-        var clip = AudioClip.Create("House elegy", frames, 2, sampleRate, false);
-        clip.SetData(samples, 0);
-        return clip;
-    }
 }

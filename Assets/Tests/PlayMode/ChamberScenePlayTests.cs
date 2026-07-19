@@ -9,6 +9,40 @@ using UnityEngine.TestTools;
 public sealed class ChamberScenePlayTests
 {
     [UnityTest]
+    public IEnumerator OpeningLoadsFromSideStandWithActionOpen()
+    {
+        yield return SceneManager.LoadSceneAsync("Chamber", LoadSceneMode.Single);
+        yield return null;
+
+        var game = Object.FindAnyObjectByType<ChamberLogicGame>();
+        var pump = GameObject.Find("Reload").transform;
+        var pumpRestPosition = pump.localPosition;
+        var firstShell = GameObject.Find("Shotgun Shell 1 — Live").transform;
+        var shellStartPosition = firstShell.position;
+        var tableBounds = CombinedBounds(GameObject.Find("Hero Duel Table — Wood Table 7"));
+        Assert.That(shellStartPosition.x, Is.LessThan(tableBounds.min.x), "Opening shell does not start beside the duel table.");
+
+        yield return new WaitForSeconds(4.72f);
+        var maximumOpenTravel = 0f;
+        var maximumShellTravel = 0f;
+        for (var elapsed = 0f; elapsed < 1.05f; elapsed += Time.deltaTime)
+        {
+            maximumOpenTravel = Mathf.Max(maximumOpenTravel, Vector3.Distance(pumpRestPosition, pump.localPosition));
+            maximumShellTravel = Mathf.Max(maximumShellTravel, Vector3.Distance(shellStartPosition, firstShell.position));
+            yield return null;
+        }
+        Assert.That(maximumOpenTravel, Is.GreaterThan(0.018f), "The shotgun action was not visibly held open during loading.");
+        Assert.That(maximumShellTravel, Is.GreaterThan(0.55f), "The first shell never travelled from the side stand to the open breech.");
+
+        yield return new WaitForSeconds(8.1f);
+        foreach (var item in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include))
+            if (item.name.StartsWith("Shotgun Shell ")) Assert.That(item.gameObject.activeSelf, Is.False, $"{item.name} was not loaded.");
+        Assert.That(Vector3.Distance(pumpRestPosition, pump.localPosition), Is.LessThan(0.001f), "Shotgun did not close after the opening load.");
+        Assert.That(game.enabled, Is.True);
+        Debug.Log($"[OpeningTransformTrace] pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m start={shellStartPosition}");
+    }
+
+    [UnityTest]
     public IEnumerator SceneLoadsAndBothShotChoicesRunCleanly()
     {
         yield return SceneManager.LoadSceneAsync("Chamber", LoadSceneMode.Single);
@@ -33,11 +67,17 @@ public sealed class ChamberScenePlayTests
         Assert.That(leftHand, Is.Not.Null);
         Assert.That(rightHand.parent, Is.EqualTo(apparition.transform));
         Assert.That(leftHand.parent, Is.EqualTo(apparition.transform));
-        Assert.That(apparition.GetComponentsInChildren<Renderer>(true), Has.Length.EqualTo(3), "The entity should be one shroud and two independent hands.");
+        Assert.That(apparition.GetComponentsInChildren<Renderer>(true), Has.Length.EqualTo(4), "The entity should be one shroud, one readable face, and two independent hands.");
         Assert.That(apparition.GetComponentInChildren<Animator>(), Is.Null);
-        Assert.That(CombinedBounds(apparition).max.y, Is.InRange(1.38f, 1.52f));
+        Assert.That(CombinedBounds(apparition).max.y, Is.InRange(1.65f, 1.82f));
         Assert.That(CombinedBounds(apparition).min.y, Is.GreaterThan(0.80f));
-        Assert.That(Vector3.Distance(face.position, apparition.transform.position), Is.LessThan(0.001f));
+        var scaryFace = GameObject.Find("Apparition Scary Face");
+        var scaryFaceBounds = CombinedBounds(scaryFace);
+        Assert.That(scaryFace.GetComponent<Renderer>().sharedMaterial.name, Is.EqualTo("Apparition_Mask_v1"));
+        Assert.That(scaryFace.GetComponent<Renderer>().sharedMaterial.mainTexture.name, Is.EqualTo("Apparition_Mask_v1"));
+        Assert.That(scaryFaceBounds.size.x, Is.InRange(0.45f, 0.49f));
+        Assert.That(scaryFaceBounds.size.y, Is.InRange(0.57f, 0.61f));
+        Assert.That(Vector3.Distance(face.position, scaryFaceBounds.center), Is.LessThan(0.06f));
         Assert.That(Object.FindAnyObjectByType<ChamberPoseDebug>(), Is.Not.Null, "Scene-space aim lines are missing.");
 
         Assert.That(GameObject.Find("Horror Package — Authored Dressing"), Is.Not.Null);
@@ -46,7 +86,13 @@ public sealed class ChamberScenePlayTests
         Assert.That(GameObject.Find("Horror Bottles — Evidence Shelf"), Is.Not.Null);
         Assert.That(GameObject.Find("Apparition Red Focus"), Is.Not.Null);
         Assert.That(GameObject.Find("Table Cold Focus"), Is.Not.Null);
-        Assert.That(RenderSettings.ambientLight.maxColorComponent, Is.LessThan(0.02f), "The room ambient light is not black enough.");
+        Assert.That(RenderSettings.ambientLight.maxColorComponent, Is.LessThan(0.002f), "The room ambient light is not black enough.");
+        var mainMusic = (AudioSource)typeof(ChamberLogicGame).GetField("musicSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
+        var layeredMusic = GameObject.Find("Horror Music Layer").GetComponent<AudioSource>();
+        Assert.That(mainMusic.clip.name, Is.EqualTo("Creepy_Ambient_Layer"));
+        Assert.That(layeredMusic.clip.name, Is.EqualTo("Abandoned_Passages"));
+        Assert.That(mainMusic.isPlaying, Is.True);
+        Assert.That(layeredMusic.isPlaying, Is.True);
         foreach (var name in new[] { "Right Wall", "Left Wall", "Back Wall", "Floor", "Ceiling" })
             foreach (var renderer in GameObject.Find(name).GetComponentsInChildren<Renderer>(true))
                 foreach (var material in renderer.sharedMaterials)
@@ -75,6 +121,11 @@ public sealed class ChamberScenePlayTests
         Assert.That(gunBounds.center.x, Is.EqualTo(tableBounds.center.x).Within(0.002f));
         Assert.That(gunBounds.center.z, Is.EqualTo(tableBounds.center.z).Within(0.002f));
 
+        var shellStandBounds = CombinedBounds(GameObject.Find("Shell Crate Stand"));
+        Assert.That(shellStandBounds.min.y, Is.EqualTo(0f).Within(0.002f), "Shell stand does not meet the floor.");
+        Assert.That(shellStandBounds.max.y, Is.InRange(0.62f, 0.67f));
+        Assert.That(shellStandBounds.max.x, Is.LessThan(tableBounds.min.x - 0.02f), "Shell stand overlaps the duel table.");
+
         var shells = 0;
         foreach (var item in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include))
         {
@@ -84,6 +135,8 @@ public sealed class ChamberScenePlayTests
             var shellSize = Vector3.Scale(shellRenderer.localBounds.size, shellRenderer.transform.lossyScale);
             Assert.That(Mathf.Max(shellSize.x, shellSize.y, shellSize.z), Is.InRange(0.055f, 0.075f));
             Assert.That(Mathf.Min(shellSize.x, shellSize.y, shellSize.z), Is.InRange(0.014f, 0.020f));
+            Assert.That(shellRenderer.bounds.min.y - shellStandBounds.max.y, Is.InRange(0.002f, 0.025f), "A shell floats above or intersects the side stand.");
+            Assert.That(shellRenderer.bounds.max.x, Is.LessThan(tableBounds.min.x), "A shell is not beside the main table.");
         }
         Assert.That(shells, Is.EqualTo(6));
 
@@ -91,6 +144,12 @@ public sealed class ChamberScenePlayTests
         Invoke(game, "CompleteOpening");
         var pump = GameObject.Find("Reload").transform;
         var pumpRestPosition = pump.localPosition;
+        game.StartCoroutine((IEnumerator)InvokeWithResult(game, "OpenWeaponAction", 0.52f));
+        yield return new WaitForSeconds(0.58f);
+        Assert.That(Vector3.Distance(pumpRestPosition, pump.localPosition), Is.GreaterThan(0.018f), "Shotgun did not remain visibly open for loading.");
+        game.StartCoroutine((IEnumerator)InvokeWithResult(game, "CloseWeaponAction", 0.46f));
+        yield return new WaitForSeconds(0.52f);
+        Assert.That(Vector3.Distance(pumpRestPosition, pump.localPosition), Is.LessThan(0.001f), "Shotgun did not close after loading.");
         game.StartCoroutine((IEnumerator)InvokeWithResult(game, "PumpWeapon", 0.40f));
         var maximumPumpTravel = 0f;
         for (var elapsed = 0f; elapsed < 0.46f; elapsed += Time.deltaTime)
@@ -111,8 +170,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(CurrentRound(game).RemainingTotal, Is.LessThan(6));
 
         ResetRound(game);
-        var rightRestPosition = rightHand.position;
-        var leftRestPosition = leftHand.position;
+        var rightRestPosition = rightHand.localPosition;
+        var leftRestPosition = leftHand.localPosition;
         game.StartCoroutine((IEnumerator)InvokeWithResult(game, "ResolveShot", false, false));
         yield return new WaitForSeconds(1.48f);
         var rightGrip = GameObject.Find("Apparition Right Grip").transform;
@@ -121,14 +180,17 @@ public sealed class ChamberScenePlayTests
         Assert.That(Vector3.Distance(leftHand.position, leftGrip.position), Is.LessThan(0.001f), "Direct left hand misses the fore grip.");
         Assert.That(rightHand.parent, Is.EqualTo(rightGrip));
         Assert.That(leftHand.parent, Is.EqualTo(leftGrip));
+        var rearHandAxisError = Mathf.Min(Vector3.Angle(rightHand.up, muzzle.forward), Vector3.Angle(-rightHand.up, muzzle.forward));
+        Assert.That(rearHandAxisError, Is.LessThan(12f), "Rear hand is not aligned along the shotgun stock.");
+        Assert.That(Vector3.Angle(leftHand.up, muzzle.forward), Is.InRange(75f, 105f), "Fore hand is not wrapped across the fore-end.");
         var camera = GameObject.Find("Duel Camera").transform;
         Assert.That(Vector3.Angle(muzzle.forward, camera.position - muzzle.position), Is.LessThan(1f), "Apparition aim misses the player camera.");
         yield return new WaitForSeconds(2.5f);
         Assert.That(CurrentRound(game).RemainingTotal, Is.LessThan(6));
         Assert.That(rightHand.parent, Is.EqualTo(apparition.transform));
         Assert.That(leftHand.parent, Is.EqualTo(apparition.transform));
-        Assert.That(Vector3.Distance(rightHand.position, rightRestPosition), Is.LessThan(0.025f));
-        Assert.That(Vector3.Distance(leftHand.position, leftRestPosition), Is.LessThan(0.025f));
+        Assert.That(Vector3.Distance(rightHand.localPosition, rightRestPosition), Is.LessThan(0.001f));
+        Assert.That(Vector3.Distance(leftHand.localPosition, leftRestPosition), Is.LessThan(0.001f));
 
         ResetRound(game);
         game.StartCoroutine((IEnumerator)InvokeWithResult(game, "ResolveShot", false, true));
