@@ -159,6 +159,10 @@ public sealed class ChamberScenePlayTests
         Assert.That(gunBounds.center.x, Is.EqualTo(tableBounds.center.x).Within(0.002f));
         Assert.That(gunBounds.center.z, Is.EqualTo(tableBounds.center.z).Within(0.002f));
         Assert.That(gunBounds.size.z, Is.InRange(0.82f, 0.86f));
+        Assert.That(gunBounds.size.y, Is.InRange(0.045f, 0.075f), "Shotgun is standing on its edge instead of lying flat.");
+        Assert.That(gunBounds.size.x, Is.InRange(0.14f, 0.18f), "Shotgun side profile was not rotated onto the table.");
+        Assert.That(Quaternion.Angle(GameObject.Find("Weapon Table Anchor").transform.rotation, Quaternion.Euler(0f, 0f, 90f)), Is.LessThan(0.1f));
+        Debug.Log($"[TableGunTrace] clearance={gunBounds.min.y - tableBounds.max.y:F3}m height={gunBounds.size.y:F3}m width={gunBounds.size.x:F3}m length={gunBounds.size.z:F3}m");
 
         var shellStandBounds = CombinedBounds(GameObject.Find("Shell Crate Stand"));
         Assert.That(shellStandBounds.min.y, Is.EqualTo(0f).Within(0.002f), "Shell stand does not meet the floor.");
