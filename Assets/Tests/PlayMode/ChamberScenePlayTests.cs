@@ -17,6 +17,11 @@ public sealed class ChamberScenePlayTests
         var game = Object.FindAnyObjectByType<ChamberLogicGame>();
         var pump = GameObject.Find("Reload").transform;
         var pumpRestPosition = pump.localPosition;
+        var shotgun = GameObject.Find("Player Shotgun").transform;
+        var shotgunTablePosition = shotgun.position;
+        var shotgunTableRotation = shotgun.rotation;
+        var loadingPose = GameObject.Find("Doll Shotgun Loading Pose").transform;
+        var loadingPort = GameObject.Find("Shotgun Breech").transform;
         var firstShell = GameObject.Find("Shotgun Shell 1 — Live").transform;
         var loadingHand = GameObject.Find("Doll Right Hand").transform;
         var supportHand = GameObject.Find("Doll Left Hand").transform;
@@ -35,15 +40,22 @@ public sealed class ChamberScenePlayTests
         var shellMovedWithoutHand = false;
         var bothHandsTookWeapon = false;
         var shellMovedWithoutGunSupport = false;
+        var weaponLiftedByBothHands = false;
+        var maximumWeaponLift = 0f;
+        var minimumShellToPortDistance = float.MaxValue;
         for (var elapsed = 0f; elapsed < 2.85f; elapsed += Time.deltaTime)
         {
             bothHandsTookWeapon |= loadingHand.parent == rearGrip && supportHand.parent == foreGrip;
+            maximumWeaponLift = Mathf.Max(maximumWeaponLift, Vector3.Distance(shotgunTablePosition, shotgun.position));
+            weaponLiftedByBothHands |= Vector3.Distance(shotgunTablePosition, shotgun.position) > 0.20f &&
+                                       loadingHand.parent == rearGrip && supportHand.parent == foreGrip;
             maximumOpenTravel = Mathf.Max(maximumOpenTravel, Vector3.Distance(pumpRestPosition, pump.localPosition));
             maximumShellTravel = Mathf.Max(maximumShellTravel, Vector3.Distance(shellStartPosition, firstShell.position));
             if (firstShell.gameObject.activeSelf)
             {
                 var handToShellDistance = Vector3.Distance(loadingHandRenderer.bounds.center, firstShellRenderer.bounds.center);
                 minimumHandToShellDistance = Mathf.Min(minimumHandToShellDistance, handToShellDistance);
+                minimumShellToPortDistance = Mathf.Min(minimumShellToPortDistance, Vector3.Distance(firstShell.position, loadingPort.position));
                 if (Vector3.Distance(shellStartPosition, firstShell.position) > 0.03f && handToShellDistance > 0.14f)
                     shellMovedWithoutHand = true;
                 if (Vector3.Distance(shellStartPosition, firstShell.position) > 0.03f && supportHand.parent != foreGrip)
@@ -56,14 +68,20 @@ public sealed class ChamberScenePlayTests
         Assert.That(minimumHandToShellDistance, Is.LessThan(0.07f), "The loading hand never grasped the first shell.");
         Assert.That(shellMovedWithoutHand, Is.False, "The first shell moved without the loading hand holding it.");
         Assert.That(bothHandsTookWeapon, Is.True, "The doll did not take the shotgun with both hands before opening it.");
+        Assert.That(weaponLiftedByBothHands, Is.True, "The doll gripped the shotgun but never picked it up.");
+        Assert.That(maximumWeaponLift, Is.GreaterThan(0.30f), "The shotgun barely left the table.");
+        Assert.That(Vector3.Distance(loadingPose.position, shotgun.position), Is.LessThan(0.03f), "Shotgun missed the authored loading pose.");
+        Assert.That(minimumShellToPortDistance, Is.LessThan(0.015f), "The shell never entered the shotgun loading port.");
         Assert.That(shellMovedWithoutGunSupport, Is.False, "The supporting hand released the shotgun during loading.");
 
         yield return new WaitForSeconds(10.8f);
         foreach (var item in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include))
             if (item.name.StartsWith("Shotgun Shell ")) Assert.That(item.gameObject.activeSelf, Is.False, $"{item.name} was not loaded.");
         Assert.That(Vector3.Distance(pumpRestPosition, pump.localPosition), Is.LessThan(0.001f), "Shotgun did not close after the opening load.");
+        Assert.That(Vector3.Distance(shotgunTablePosition, shotgun.position), Is.LessThan(0.002f), "Shotgun was not lowered back onto the table.");
+        Assert.That(Quaternion.Angle(shotgunTableRotation, shotgun.rotation), Is.LessThan(0.1f));
         Assert.That(game.enabled, Is.True);
-        Debug.Log($"[OpeningTransformTrace] pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m handGrip={minimumHandToShellDistance:F3}m start={shellStartPosition}");
+        Debug.Log($"[OpeningTransformTrace] gunLift={maximumWeaponLift:F3}m pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m handGrip={minimumHandToShellDistance:F3}m portError={minimumShellToPortDistance:F3}m start={shellStartPosition}");
     }
 
     [UnityTest]
