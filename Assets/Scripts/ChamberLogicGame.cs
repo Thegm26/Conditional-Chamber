@@ -71,6 +71,40 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private bool lastDealerHitWasSelfInflicted;
     private Vector3 pumpRestPosition;
     private Quaternion pumpRestRotation;
+    private HandPoseRig rightHandRig;
+    private HandPoseRig leftHandRig;
+
+    private sealed class HandPoseRig
+    {
+        public readonly Transform[] fingerBones;
+        public readonly Quaternion[] fingerRestRotations;
+        public readonly Transform[] thumbBones;
+        public readonly Quaternion[] thumbRestRotations;
+
+        public HandPoseRig(Transform root)
+        {
+            fingerBones = new[]
+            {
+                FindDescendant(root, "IndexFinger"), FindDescendant(root, "Index2"), FindDescendant(root, "Index3"),
+                FindDescendant(root, "MiddleFinger"), FindDescendant(root, "Middle2"), FindDescendant(root, "Middle3"),
+                FindDescendant(root, "RingFinger"), FindDescendant(root, "Ring2"), FindDescendant(root, "Ring3"),
+                FindDescendant(root, "LittleFinger"), FindDescendant(root, "Little2"), FindDescendant(root, "Little3")
+            };
+            thumbBones = new[] { FindDescendant(root, "Thumb"), FindDescendant(root, "Thumb2") };
+            fingerRestRotations = CaptureRotations(fingerBones);
+            thumbRestRotations = CaptureRotations(thumbBones);
+        }
+
+        public bool IsComplete
+        {
+            get
+            {
+                foreach (var bone in fingerBones) if (bone == null) return false;
+                foreach (var bone in thumbBones) if (bone == null) return false;
+                return true;
+            }
+        }
+    }
 
     private void Awake()
     {
@@ -98,6 +132,14 @@ public sealed class ChamberLogicGame : MonoBehaviour
         leftHandRestPosition = dealerLeftHand.localPosition;
         rightHandRestRotation = dealerRightHand.localRotation;
         leftHandRestRotation = dealerLeftHand.localRotation;
+        rightHandRig = new HandPoseRig(dealerRightHand);
+        leftHandRig = new HandPoseRig(dealerLeftHand);
+        if (!rightHandRig.IsComplete || !leftHandRig.IsComplete)
+        {
+            Debug.LogError("The saved doll hands are missing finger bones. Reimport the Simple Hands package.");
+            enabled = false;
+            return;
+        }
         pumpRestPosition = weaponPump.localPosition;
         pumpRestRotation = weaponPump.localRotation;
         foreach (var shell in shellProps)
@@ -518,11 +560,15 @@ public sealed class ChamberLogicGame : MonoBehaviour
             dealerLeftHand.position = Vector3.Lerp(leftStartPosition, leftTarget.position, progress) + Vector3.up * lift;
             dealerRightHand.rotation = Quaternion.Slerp(rightStartRotation, rightTarget.rotation, progress);
             dealerLeftHand.rotation = Quaternion.Slerp(leftStartRotation, leftTarget.rotation, progress);
+            SetHandPose(dealerRightHand, progress, false);
+            SetHandPose(dealerLeftHand, progress, false);
             yield return null;
         }
 
         AttachHand(dealerRightHand, rightTarget);
         AttachHand(dealerLeftHand, leftTarget);
+        SetHandPose(dealerRightHand, 1f, false);
+        SetHandPose(dealerLeftHand, 1f, false);
     }
 
     private IEnumerator LoadShellByHand(GameObject shell, int shellIndex)
@@ -535,8 +581,9 @@ public sealed class ChamberLogicGame : MonoBehaviour
         var pickupPosition = shellCenter + Vector3.right * 0.032f + Vector3.up * 0.006f - handVisualOffset;
         var pickupRotation = rightHandRestParent.rotation * rightHandRestRotation * Quaternion.Euler(0f, 0f, -12f);
 
+        SetHandPose(dealerRightHand, 0.08f, true);
         yield return MoveHandWorld(dealerRightHand, pickupPosition, pickupRotation, 0.34f, 0.035f);
-        yield return new WaitForSeconds(0.08f);
+        yield return AnimateHandPose(dealerRightHand, 0.08f, 0.68f, true, 0.14f);
 
         shellTransform.SetParent(dealerRightHand, true);
         var shellLocalPosition = shellTransform.localPosition;
@@ -554,7 +601,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
         if (shellIndex < shellRestParents.Count) shellTransform.SetParent(shellRestParents[shellIndex], true);
         shell.SetActive(false);
         yield return new WaitForSeconds(0.08f);
-        yield return MoveHandToRest(dealerRightHand, rightHandRestParent, rightHandRestPosition, rightHandRestRotation, 0.26f);
+        yield return MoveHandToRest(dealerRightHand, rightHandRestParent, rightHandRestPosition, rightHandRestRotation, 0.26f, 0.68f);
     }
 
     private void GetHandPoseForShell(Vector3 shellLocalPosition, Quaternion shellLocalRotation,
@@ -582,15 +629,26 @@ public sealed class ChamberLogicGame : MonoBehaviour
         hand.rotation = targetRotation;
     }
 
-    private static IEnumerator MoveHandToRest(Transform hand, Transform restParent, Vector3 restPosition,
-        Quaternion restRotation, float duration)
+    private IEnumerator MoveHandToRest(Transform hand, Transform restParent, Vector3 restPosition,
+        Quaternion restRotation, float duration, float startingCurl = 1f)
     {
         var targetPosition = restParent.TransformPoint(restPosition);
         var targetRotation = restParent.rotation * restRotation;
-        yield return MoveHandWorld(hand, targetPosition, targetRotation, duration, 0.025f);
+        var startPosition = hand.position;
+        var startRotation = hand.rotation;
+        hand.SetParent(null, true);
+        for (var t = 0f; t < duration; t += Time.deltaTime)
+        {
+            var progress = Mathf.SmoothStep(0f, 1f, t / duration);
+            hand.position = Vector3.Lerp(startPosition, targetPosition, progress) + Vector3.up * (Mathf.Sin(progress * Mathf.PI) * 0.025f);
+            hand.rotation = Quaternion.Slerp(startRotation, targetRotation, progress);
+            SetHandPose(hand, Mathf.Lerp(startingCurl, 0f, progress), false);
+            yield return null;
+        }
         hand.SetParent(restParent, false);
         hand.localPosition = restPosition;
         hand.localRotation = restRotation;
+        SetHandPose(hand, 0f, false);
     }
 
     private IEnumerator ReturnDealerHands(float duration)
@@ -613,6 +671,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
             dealerLeftHand.position = Vector3.Lerp(leftStartPosition, leftTargetPosition, progress);
             dealerRightHand.rotation = Quaternion.Slerp(rightStartRotation, rightTargetRotation, progress);
             dealerLeftHand.rotation = Quaternion.Slerp(leftStartRotation, leftTargetRotation, progress);
+            SetHandPose(dealerRightHand, 1f - progress, false);
+            SetHandPose(dealerLeftHand, 1f - progress, false);
             yield return null;
         }
         ReleaseDealerHands();
@@ -633,6 +693,54 @@ public sealed class ChamberLogicGame : MonoBehaviour
         dealerLeftHand.SetParent(leftHandRestParent, false);
         dealerLeftHand.localPosition = leftHandRestPosition;
         dealerLeftHand.localRotation = leftHandRestRotation;
+        SetHandPose(dealerRightHand, 0f, false);
+        SetHandPose(dealerLeftHand, 0f, false);
+    }
+
+    private IEnumerator AnimateHandPose(Transform hand, float fromCurl, float toCurl, bool pinch, float duration)
+    {
+        for (var t = 0f; t < duration; t += Time.deltaTime)
+        {
+            var progress = Mathf.SmoothStep(0f, 1f, t / duration);
+            SetHandPose(hand, Mathf.Lerp(fromCurl, toCurl, progress), pinch);
+            yield return null;
+        }
+        SetHandPose(hand, toCurl, pinch);
+    }
+
+    private void SetHandPose(Transform hand, float curl, bool pinch)
+    {
+        var rig = hand == dealerRightHand ? rightHandRig : leftHandRig;
+        if (rig == null || !rig.IsComplete) return;
+        curl = Mathf.Clamp01(curl);
+        for (var i = 0; i < rig.fingerBones.Length; i++)
+        {
+            var finger = i / 3;
+            var segment = i % 3;
+            var fingerCurl = pinch && finger == 0 ? curl * 0.72f : curl;
+            var angle = segment == 0 ? 54f : (segment == 1 ? 68f : 44f);
+            rig.fingerBones[i].localRotation = rig.fingerRestRotations[i] * Quaternion.Euler(-angle * fingerCurl, 0f, 0f);
+        }
+        for (var i = 0; i < rig.thumbBones.Length; i++)
+        {
+            var angle = i == 0 ? 38f : 52f;
+            rig.thumbBones[i].localRotation = rig.thumbRestRotations[i] *
+                Quaternion.Euler(-angle * curl, (pinch ? 18f : 10f) * curl, -12f * curl);
+        }
+    }
+
+    private static Quaternion[] CaptureRotations(Transform[] bones)
+    {
+        var rotations = new Quaternion[bones.Length];
+        for (var i = 0; i < bones.Length; i++) rotations[i] = bones[i] == null ? Quaternion.identity : bones[i].localRotation;
+        return rotations;
+    }
+
+    private static Transform FindDescendant(Transform root, string name)
+    {
+        foreach (var item in root.GetComponentsInChildren<Transform>(true))
+            if (item.name == name) return item;
+        return null;
     }
 
     private void ResetDealerEntity()

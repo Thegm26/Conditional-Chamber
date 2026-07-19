@@ -94,6 +94,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(leftHand, Is.Not.Null);
         Assert.That(rightHand.parent, Is.EqualTo(handRest));
         Assert.That(leftHand.parent, Is.EqualTo(handRest));
+        Assert.That(rightHand.GetComponentInChildren<SkinnedMeshRenderer>(), Is.Not.Null, "Right hand is not using the imported finger rig.");
+        Assert.That(leftHand.GetComponentInChildren<SkinnedMeshRenderer>(), Is.Not.Null, "Left hand is not using the imported finger rig.");
         Assert.That(apparition.GetComponentsInChildren<Renderer>(true), Has.Length.EqualTo(1), "The target should contain only the real Voodoo Doll renderer.");
         Assert.That(apparition.GetComponentInChildren<Animator>(), Is.Null);
         var dollBounds = CombinedBounds(doll);
@@ -114,8 +116,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(GameObject.Find("Apparition Red Focus"), Is.Not.Null);
         var tableFocus = GameObject.Find("Table Cold Focus").GetComponent<Light>();
         Assert.That(tableFocus, Is.Not.Null);
-        Assert.That(tableFocus.intensity, Is.GreaterThanOrEqualTo(2.1f), "The shotgun work light is too dim.");
-        Assert.That(tableFocus.spotAngle, Is.GreaterThanOrEqualTo(56f), "The shotgun work light is too narrow.");
+        Assert.That(tableFocus.intensity, Is.GreaterThanOrEqualTo(3.7f), "The shotgun work light is too dim.");
+        Assert.That(tableFocus.spotAngle, Is.GreaterThanOrEqualTo(64f), "The shotgun work light is too narrow.");
         Assert.That(RenderSettings.ambientLight.maxColorComponent, Is.LessThan(0.002f), "The room ambient light is not black enough.");
         var mainMusic = (AudioSource)typeof(ChamberLogicGame).GetField("musicSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         var layeredMusic = GameObject.Find("Horror Music Layer").GetComponent<AudioSource>();
@@ -147,6 +149,8 @@ public sealed class ChamberScenePlayTests
         var table = GameObject.Find("Hero Duel Table — Wood Table 7");
         var tableBounds = CombinedBounds(table);
         var gunBounds = CombinedBounds(shotgun.gameObject);
+        Assert.That(CombinedBounds(rightHand.gameObject).max.y, Is.LessThan(tableBounds.max.y - 0.04f), "Right hand should wait hidden below the table.");
+        Assert.That(CombinedBounds(leftHand.gameObject).max.y, Is.LessThan(tableBounds.max.y - 0.04f), "Left hand should wait hidden below the table.");
         Assert.That(tableBounds.min.y, Is.EqualTo(0f).Within(0.002f));
         Assert.That(tableBounds.max.y, Is.InRange(0.82f, 0.90f));
         Assert.That(tableBounds.size.x, Is.InRange(1.65f, 1.71f));
@@ -207,6 +211,8 @@ public sealed class ChamberScenePlayTests
         ResetRound(game);
         var rightRestPosition = rightHand.localPosition;
         var leftRestPosition = leftHand.localPosition;
+        var rightOpenFingerSpan = Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position);
+        var leftOpenFingerSpan = Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position);
         game.StartCoroutine((IEnumerator)InvokeWithResult(game, "ResolveShot", false, false));
         yield return new WaitForSeconds(1.48f);
         var rightGrip = GameObject.Find("Apparition Right Grip").transform;
@@ -215,6 +221,13 @@ public sealed class ChamberScenePlayTests
         Assert.That(Vector3.Distance(leftHand.position, leftGrip.position), Is.LessThan(0.001f), "Direct left hand misses the fore grip.");
         Assert.That(rightHand.parent, Is.EqualTo(rightGrip));
         Assert.That(leftHand.parent, Is.EqualTo(leftGrip));
+        Assert.That(Quaternion.Angle(Quaternion.identity, FindDescendant(rightHand, "Index2").localRotation), Is.GreaterThan(42f), "Right fingers did not curl around the rear grip.");
+        Assert.That(Quaternion.Angle(Quaternion.identity, FindDescendant(leftHand, "Middle2").localRotation), Is.GreaterThan(42f), "Left fingers did not curl around the fore grip.");
+        Assert.That(Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position), Is.LessThan(rightOpenFingerSpan * 0.86f), "Right index finger curled away from the palm.");
+        Assert.That(Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position), Is.LessThan(leftOpenFingerSpan * 0.86f), "Left middle finger curled away from the palm.");
+        Assert.That(BoundsSeparation(CombinedBounds(rightHand.gameObject), CombinedBounds(shotgun.gameObject)), Is.LessThan(0.025f), "Right hand does not contact the shotgun.");
+        Assert.That(BoundsSeparation(CombinedBounds(leftHand.gameObject), CombinedBounds(shotgun.gameObject)), Is.LessThan(0.025f), "Left hand does not contact the shotgun.");
+        Debug.Log($"[HandGripTrace] rightSpan={Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position):F3}/{rightOpenFingerSpan:F3}m leftSpan={Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position):F3}/{leftOpenFingerSpan:F3}m rightContact={BoundsSeparation(CombinedBounds(rightHand.gameObject), CombinedBounds(shotgun.gameObject)):F3}m leftContact={BoundsSeparation(CombinedBounds(leftHand.gameObject), CombinedBounds(shotgun.gameObject)):F3}m");
         var rearHandAxisError = Mathf.Min(Vector3.Angle(rightHand.up, muzzle.forward), Vector3.Angle(-rightHand.up, muzzle.forward));
         Assert.That(rearHandAxisError, Is.LessThan(12f), "Rear hand is not aligned along the shotgun stock.");
         Assert.That(Vector3.Angle(leftHand.up, muzzle.forward), Is.InRange(75f, 105f), "Fore hand is not wrapped across the fore-end.");
@@ -310,5 +323,20 @@ public sealed class ChamberScenePlayTests
         var bounds = renderers[0].bounds;
         for (var i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
         return bounds;
+    }
+
+    private static Transform FindDescendant(Transform root, string name)
+    {
+        foreach (var item in root.GetComponentsInChildren<Transform>(true))
+            if (item.name == name) return item;
+        return null;
+    }
+
+    private static float BoundsSeparation(Bounds a, Bounds b)
+    {
+        var dx = Mathf.Max(0f, Mathf.Max(a.min.x - b.max.x, b.min.x - a.max.x));
+        var dy = Mathf.Max(0f, Mathf.Max(a.min.y - b.max.y, b.min.y - a.max.y));
+        var dz = Mathf.Max(0f, Mathf.Max(a.min.z - b.max.z, b.min.z - a.max.z));
+        return new Vector3(dx, dy, dz).magnitude;
     }
 }
