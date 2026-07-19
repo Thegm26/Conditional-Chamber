@@ -20,8 +20,15 @@ public sealed class ChamberScenePlayTests
         Assert.That(GameObject.Find("EventSystem"), Is.Null);
         Assert.That(GameObject.Find("Environment — Authored Detail Pass"), Is.Not.Null);
         Assert.That(GameObject.Find("The House — Dealer Character"), Is.Not.Null);
-        Assert.That(GameObject.Find("Left Security Watcher"), Is.Not.Null);
-        Assert.That(GameObject.Find("Right Security Watcher"), Is.Not.Null);
+        Assert.That(GameObject.Find("Left Security Watcher"), Is.Null);
+        Assert.That(GameObject.Find("Right Security Watcher"), Is.Null);
+        Assert.That(GameObject.Find("Duel Table — Imported Furniture Set"), Is.Not.Null);
+        Assert.That(GameObject.Find("Imported Walnut Duel Table"), Is.Not.Null);
+        Assert.That(GameObject.Find("Imported Shell Side Table"), Is.Not.Null);
+        Assert.That(GameObject.Find("Player Hands Rig"), Is.Not.Null);
+        Assert.That(GameObject.Find("Player Left Hand"), Is.Not.Null);
+        Assert.That(GameObject.Find("Player Right Hand"), Is.Not.Null);
+        Assert.That(Object.FindAnyObjectByType<ChamberPoseDebug>(), Is.Not.Null, "Scene-space grip and aim debug lines are missing.");
         Assert.That(Object.FindObjectsByType<Light>(FindObjectsInactive.Include), Has.Length.GreaterThanOrEqualTo(8));
         foreach (var transform in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include))
             Assert.That(transform.name, Does.Not.Contain("Skeleton"));
@@ -42,13 +49,18 @@ public sealed class ChamberScenePlayTests
         Assert.That(baseRenderer, Is.Not.Null, "The authored shotgun body lost its six material slots.");
         foreach (var renderer in gunRenderers)
             foreach (var material in renderer.sharedMaterials) Assert.That(material, Is.Not.Null);
-        Assert.That(baseRenderer.bounds.size.z, Is.InRange(0.9f, 1.3f), "Shotgun visual scale regressed.");
+        Assert.That(Mathf.Max(baseRenderer.bounds.size.x, baseRenderer.bounds.size.z), Is.InRange(0.9f, 1.3f), "Shotgun visual scale regressed.");
+        var duelCamera = GameObject.Find("Duel Camera").GetComponent<Camera>();
+        var gunViewport = duelCamera.WorldToViewportPoint(CombinedBounds(playerShotgun.gameObject).center);
+        Assert.That(gunViewport.z, Is.GreaterThan(0f), "The table shotgun is behind the player camera.");
+        Assert.That(gunViewport.x, Is.InRange(0.12f, 0.88f), "The table shotgun is outside the horizontal camera frame.");
+        Assert.That(gunViewport.y, Is.InRange(0.12f, 0.88f), "The table shotgun is outside the vertical camera frame.");
 
         var dealer = GameObject.Find("The House — Dealer Character");
         var dealerAnimator = dealer.GetComponentInChildren<Animator>();
         Assert.That(dealerAnimator, Is.Not.Null, "Dealer Animator is missing.");
         Assert.That(dealerAnimator.runtimeAnimatorController, Is.Not.Null, "Dealer animation controller is missing.");
-        Assert.That(Object.FindObjectsByType<Animator>(FindObjectsInactive.Include), Has.Length.EqualTo(3), "Exactly three character Animators must be saved in the scene.");
+        Assert.That(Object.FindObjectsByType<Animator>(FindObjectsInactive.Include), Has.Length.EqualTo(1), "Only the seated dealer should remain in the scene.");
         var musicSource = (AudioSource)typeof(ChamberLogicGame).GetField("musicSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         Assert.That(musicSource, Is.Not.Null, "The saved scene lost its horror-music source reference.");
         Assert.That(musicSource.isPlaying, Is.True, "The horror score did not begin playing.");
@@ -59,25 +71,37 @@ public sealed class ChamberScenePlayTests
         Assert.That(Quaternion.Angle(armBefore, animatedArm.localRotation), Is.GreaterThan(0.05f), "Dealer idle animation is not advancing.");
 
         var dealerBounds = CombinedBounds(dealer);
-        Assert.That(dealerBounds.max.y, Is.LessThan(2f), "Dealer is too high in the scene.");
-        Assert.That(dealerBounds.center.y, Is.LessThan(1.2f));
-
-        var targetBounds = CombinedBounds(GameObject.Find("Range Target"));
-        Assert.That(targetBounds.size.x, Is.GreaterThan(1f), "Target is too small or edge-on.");
-        Assert.That(targetBounds.size.y, Is.GreaterThan(1f));
-        Assert.That(targetBounds.size.z, Is.LessThan(0.6f));
+        Assert.That(dealerBounds.max.y, Is.LessThan(1.65f), "Dealer is not seated behind the table.");
+        Assert.That(dealerBounds.center.y, Is.LessThan(0.85f));
+        Assert.That(GameObject.Find("Range Target"), Is.Null, "The dealer is now the shot target; the old range target must be removed.");
 
         var shells = 0;
         foreach (var item in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include))
-            if (item.name.StartsWith("Shotgun Shell ")) shells++;
+        {
+            if (!item.name.StartsWith("Shotgun Shell ")) continue;
+            shells++;
+            var shellRenderer = item.GetComponentInChildren<Renderer>();
+            Assert.That(Mathf.Max(shellRenderer.bounds.size.x, shellRenderer.bounds.size.y, shellRenderer.bounds.size.z),
+                Is.LessThan(0.15f), "A shell is implausibly oversized.");
+        }
         Assert.That(shells, Is.EqualTo(6));
-        Assert.That(GameObject.Find("Recessed Shell Inspection Tray"), Is.Not.Null);
+        Assert.That(GameObject.Find("Side Loading Rack"), Is.Not.Null);
 
         game.StopAllCoroutines();
         Invoke(game, "CompleteOpening");
 
+        var tablePosition = playerShotgun.position;
         Invoke(game, "ChooseDealer");
-        yield return new WaitForSeconds(1.4f);
+        yield return new WaitForSeconds(1.08f);
+        Assert.That(Vector3.Distance(tablePosition, playerShotgun.position), Is.GreaterThan(0.08f), "The player did not pick the shotgun up from the table.");
+        var muzzle = GameObject.Find("Muzzle Flash").transform;
+        var dealerFace = GameObject.Find("Dealer Face Debug Point").transform;
+        var rearGrip = GameObject.Find("Shotgun Rear Grip Debug Point").transform;
+        var foreGrip = GameObject.Find("Shotgun Fore Grip Debug Point").transform;
+        Assert.That(Vector3.Angle(muzzle.forward, dealerFace.position - muzzle.position), Is.LessThan(1f), "Player shotgun debug line misses the dealer's face.");
+        Assert.That(Vector3.Distance(GameObject.Find("Player Right Hand").transform.position, rearGrip.position), Is.LessThan(0.02f), "Player rear hand does not reach the shotgun grip.");
+        Assert.That(Vector3.Distance(GameObject.Find("Player Left Hand").transform.position, foreGrip.position), Is.LessThan(0.02f), "Player fore hand does not reach the shotgun grip.");
+        yield return new WaitForSeconds(1.92f);
         Assert.That(CurrentRound(game).RemainingTotal, Is.LessThan(6), "House-target shot did not consume a shell.");
 
         game.StopAllCoroutines();
@@ -86,9 +110,15 @@ public sealed class ChamberScenePlayTests
         Invoke(game, "CompleteOpening");
         Assert.That(CurrentRound(game).RemainingTotal, Is.EqualTo(6));
 
-        Invoke(game, "ChooseSelf");
-        yield return new WaitForSeconds(1.4f);
-        Assert.That(CurrentRound(game).RemainingTotal, Is.LessThan(6), "Self-target shot did not consume a shell.");
+        tablePosition = playerShotgun.position;
+        var dealerRoutine = (IEnumerator)typeof(ChamberLogicGame).GetMethod("ResolveShot", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(game, new object[] { false, false });
+        game.StartCoroutine(dealerRoutine);
+        yield return new WaitForSeconds(0.9f);
+        Assert.That(Vector3.Distance(tablePosition, playerShotgun.position), Is.GreaterThan(0.08f), "The dealer did not take the shared shotgun from the table.");
+        Assert.That(Vector3.Angle(muzzle.forward, duelCamera.transform.position - muzzle.position), Is.LessThan(1f), "Dealer shotgun debug line misses the player camera.");
+        yield return new WaitForSeconds(2.05f);
+        Assert.That(CurrentRound(game).RemainingTotal, Is.LessThan(6), "Dealer shot did not consume a shell.");
 
         game.StopAllCoroutines();
         Invoke(game, "StartExperiment");
