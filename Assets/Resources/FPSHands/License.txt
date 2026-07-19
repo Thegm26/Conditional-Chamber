@@ -1,0 +1,5 @@
+Low Poly FPS Rifle and Hands by Robin Lamb
+https://opengameart.org/content/low-poly-fps-rifle-and-hands
+
+Released under Creative Commons Zero (CC0 1.0 Universal).
+The imported FBX is used as a first-person hand rig reference.
