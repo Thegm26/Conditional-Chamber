@@ -8,6 +8,8 @@
 [Uu]ser[Ss]ettings/
 [Mm]emoryCaptures/
 [Rr]ecordings/
+[Tt]est[Rr]esults/
+*.test-results.xml
 
 # IDE and editor files
 .idea/
@@ -34,3 +36,11 @@ Thumbs.db
 sysinfo.txt
 crashlytics-build.properties
 Assets/AssetStoreTools*
+
+# One-shot editor automation must never ship with the authored scene.
+Assets/Editor/*SceneAuthor.cs
+Assets/Editor/*SceneAuthor.cs.meta
+Assets/Editor/*Audit.cs
+Assets/Editor/*Audit.cs.meta
+
+# Keep active Unity .meta files tracked: scenes and prefabs reference their GUIDs.
