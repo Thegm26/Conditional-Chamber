@@ -6,7 +6,7 @@ An original, Buckshot-inspired 3D probability duel for Unity. Every shell count 
 
 Open this folder in Unity 6, open `Assets/Scenes/Chamber.unity`, and press Play. The editable scene is also the configured build scene.
 
-The saved scene is directly authored: one animated dealer sits across a proportionally scaled, textured wooden duel table with a matching chair set, and one shared shotgun rests at the measured center of the tabletop. Six realistically scaled shells begin on a separate side table before the slow loading reveal. Shooting includes dealer hold/point/fire/constrained-hit states, recoil, muzzle flash, camera impact, layered gun audio, ambient sound, and a looping horror score.
+The saved scene is directly authored: one animated dealer sits across a proportionally scaled, textured wooden duel table with a matching chair set, and one shared shotgun rests at the measured center of the tabletop. Six approximately 69 mm shells begin in the loading rack before the slow reveal. Shooting includes runtime two-hand grip IK, separate self-aim contacts, visible fore-end pump travel, dealer hold/point/fire states, a controlled backward hit reaction, recoil, muzzle flash, camera impact, layered gun audio, ambient sound, and a looping horror score.
 
 Use `1` to aim at the dealer, `2` to aim at yourself, and `R` to restart. In Scene view, `ChamberPoseDebug` draws colored grip points and muzzle-to-face lines for all four authored firing poses; its context menu can log positions, distances, and angular error.
 
