@@ -53,31 +53,34 @@ public sealed class ChamberScenePlayTests
         Assert.That(game.enabled, Is.True, "Saved Chamber references are incomplete.");
         Assert.That(Object.FindAnyObjectByType<Canvas>(), Is.Null, "The art pass should not contain UI.");
         Assert.That(GameObject.Find("The House — Dealer Character"), Is.Null, "The humanoid dealer must be removed.");
-        Assert.That(Object.FindObjectsByType<Animator>(FindObjectsInactive.Include), Is.Empty, "The apparition must not depend on a humanoid rig or IK chain.");
+        Assert.That(Object.FindObjectsByType<Animator>(FindObjectsInactive.Include), Is.Empty, "The doll must remain a static prop without an animation rig.");
         Assert.That(GameObject.Find("Player Hands Rig"), Is.Null);
         Assert.That(GameObject.Find("Player Left Hand"), Is.Null);
         Assert.That(GameObject.Find("Player Right Hand"), Is.Null);
 
-        var apparition = GameObject.Find("The House — Apparition");
-        var rightHand = GameObject.Find("Apparition Right Hand").transform;
-        var leftHand = GameObject.Find("Apparition Left Hand").transform;
-        var face = GameObject.Find("Apparition Face Debug Point").transform;
+        var apparition = GameObject.Find("The House — Voodoo Doll");
+        var rightHand = GameObject.Find("Doll Right Hand").transform;
+        var leftHand = GameObject.Find("Doll Left Hand").transform;
+        var face = GameObject.Find("Voodoo Doll Face Target").transform;
+        var handRest = GameObject.Find("Doll Hands — Side Rest").transform;
+        var doll = GameObject.Find("Voodoo Doll — Seated Target");
         Assert.That(apparition, Is.Not.Null);
+        Assert.That(doll, Is.Not.Null);
         Assert.That(rightHand, Is.Not.Null);
         Assert.That(leftHand, Is.Not.Null);
-        Assert.That(rightHand.parent, Is.EqualTo(apparition.transform));
-        Assert.That(leftHand.parent, Is.EqualTo(apparition.transform));
-        Assert.That(apparition.GetComponentsInChildren<Renderer>(true), Has.Length.EqualTo(4), "The entity should be one shroud, one readable face, and two independent hands.");
+        Assert.That(rightHand.parent, Is.EqualTo(handRest));
+        Assert.That(leftHand.parent, Is.EqualTo(handRest));
+        Assert.That(apparition.GetComponentsInChildren<Renderer>(true), Has.Length.EqualTo(1), "The target should contain only the real Voodoo Doll renderer.");
         Assert.That(apparition.GetComponentInChildren<Animator>(), Is.Null);
-        Assert.That(CombinedBounds(apparition).max.y, Is.InRange(1.65f, 1.82f));
-        Assert.That(CombinedBounds(apparition).min.y, Is.GreaterThan(0.80f));
-        var scaryFace = GameObject.Find("Apparition Scary Face");
-        var scaryFaceBounds = CombinedBounds(scaryFace);
-        Assert.That(scaryFace.GetComponent<Renderer>().sharedMaterial.name, Is.EqualTo("Apparition_Mask_v1"));
-        Assert.That(scaryFace.GetComponent<Renderer>().sharedMaterial.mainTexture.name, Is.EqualTo("Apparition_Mask_v1"));
-        Assert.That(scaryFaceBounds.size.x, Is.InRange(0.45f, 0.49f));
-        Assert.That(scaryFaceBounds.size.y, Is.InRange(0.57f, 0.61f));
-        Assert.That(Vector3.Distance(face.position, scaryFaceBounds.center), Is.LessThan(0.06f));
+        var dollBounds = CombinedBounds(doll);
+        Assert.That(dollBounds.size.x, Is.InRange(0.59f, 0.64f));
+        Assert.That(dollBounds.size.y, Is.InRange(0.82f, 0.86f));
+        Assert.That(dollBounds.min.y, Is.InRange(0.47f, 0.51f));
+        Assert.That(dollBounds.max.y, Is.InRange(1.31f, 1.35f));
+        Assert.That(face.position.y, Is.EqualTo(dollBounds.max.y - 0.16f).Within(0.015f));
+        Assert.That(dollBounds.min.z - face.position.z, Is.InRange(0.005f, 0.045f));
+        Assert.That(GameObject.Find("Horror Package Hanging Shroud"), Is.Null);
+        Assert.That(GameObject.Find("Apparition Scary Face"), Is.Null);
         Assert.That(Object.FindAnyObjectByType<ChamberPoseDebug>(), Is.Not.Null, "Scene-space aim lines are missing.");
 
         Assert.That(GameObject.Find("Horror Package — Authored Dressing"), Is.Not.Null);
@@ -89,10 +92,13 @@ public sealed class ChamberScenePlayTests
         Assert.That(RenderSettings.ambientLight.maxColorComponent, Is.LessThan(0.002f), "The room ambient light is not black enough.");
         var mainMusic = (AudioSource)typeof(ChamberLogicGame).GetField("musicSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         var layeredMusic = GameObject.Find("Horror Music Layer").GetComponent<AudioSource>();
+        var dollMusic = GameObject.Find("Doll Music Box").GetComponent<AudioSource>();
         Assert.That(mainMusic.clip.name, Is.EqualTo("Creepy_Ambient_Layer"));
         Assert.That(layeredMusic.clip.name, Is.EqualTo("Abandoned_Passages"));
+        Assert.That(dollMusic.clip.name, Is.EqualTo("Doll_Spooky_Waltz"));
         Assert.That(mainMusic.isPlaying, Is.True);
         Assert.That(layeredMusic.isPlaying, Is.True);
+        Assert.That(dollMusic.isPlaying, Is.True);
         foreach (var name in new[] { "Right Wall", "Left Wall", "Back Wall", "Floor", "Ceiling" })
             foreach (var renderer in GameObject.Find(name).GetComponentsInChildren<Renderer>(true))
                 foreach (var material in renderer.sharedMaterials)
@@ -104,7 +110,8 @@ public sealed class ChamberScenePlayTests
             if (item.name == "Player Shotgun" || item.name == "Dealer Shotgun") shotgunCount++;
         Assert.That(shotgunCount, Is.EqualTo(1), "Exactly one shared shotgun should exist.");
         var gunRenderers = shotgun.GetComponentsInChildren<Renderer>(true);
-        Assert.That(gunRenderers, Has.Length.GreaterThanOrEqualTo(2));
+        Assert.That(GameObject.Find("Imported ShotGun C Visual"), Is.Not.Null);
+        Assert.That(gunRenderers, Has.Length.GreaterThanOrEqualTo(8));
         foreach (var renderer in gunRenderers)
             foreach (var material in renderer.sharedMaterials)
                 Assert.That(material, Is.Not.Null);
@@ -120,6 +127,7 @@ public sealed class ChamberScenePlayTests
         Assert.That(gunBounds.min.y - tableBounds.max.y, Is.InRange(0.005f, 0.06f), "Shotgun intersects or floats above the table.");
         Assert.That(gunBounds.center.x, Is.EqualTo(tableBounds.center.x).Within(0.002f));
         Assert.That(gunBounds.center.z, Is.EqualTo(tableBounds.center.z).Within(0.002f));
+        Assert.That(gunBounds.size.z, Is.InRange(0.82f, 0.86f));
 
         var shellStandBounds = CombinedBounds(GameObject.Find("Shell Crate Stand"));
         Assert.That(shellStandBounds.min.y, Is.EqualTo(0f).Within(0.002f), "Shell stand does not meet the floor.");
@@ -157,7 +165,7 @@ public sealed class ChamberScenePlayTests
             maximumPumpTravel = Mathf.Max(maximumPumpTravel, Vector3.Distance(pumpRestPosition, pump.localPosition));
             yield return null;
         }
-        Assert.That(maximumPumpTravel, Is.GreaterThan(0.007f));
+        Assert.That(maximumPumpTravel, Is.GreaterThan(0.055f));
         Assert.That(Vector3.Distance(pumpRestPosition, pump.localPosition), Is.LessThan(0.001f));
 
         var muzzle = GameObject.Find("Muzzle Flash").transform;
@@ -187,8 +195,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(Vector3.Angle(muzzle.forward, camera.position - muzzle.position), Is.LessThan(1f), "Apparition aim misses the player camera.");
         yield return new WaitForSeconds(2.5f);
         Assert.That(CurrentRound(game).RemainingTotal, Is.LessThan(6));
-        Assert.That(rightHand.parent, Is.EqualTo(apparition.transform));
-        Assert.That(leftHand.parent, Is.EqualTo(apparition.transform));
+        Assert.That(rightHand.parent, Is.EqualTo(handRest));
+        Assert.That(leftHand.parent, Is.EqualTo(handRest));
         Assert.That(Vector3.Distance(rightHand.localPosition, rightRestPosition), Is.LessThan(0.001f));
         Assert.That(Vector3.Distance(leftHand.localPosition, leftRestPosition), Is.LessThan(0.001f));
 
@@ -204,23 +212,49 @@ public sealed class ChamberScenePlayTests
 
         ResetRound(game);
         var entityRestPosition = apparition.transform.localPosition;
-        var entityRestScale = apparition.transform.localScale;
+        var entityRestRotation = apparition.transform.localRotation;
+        yield return new WaitForSeconds(0.45f);
+        Assert.That(Vector3.Distance(entityRestPosition, apparition.transform.localPosition), Is.LessThan(0.0001f), "The seated doll moves while idle.");
+        Assert.That(Quaternion.Angle(entityRestRotation, apparition.transform.localRotation), Is.LessThan(0.001f), "The seated doll rotates while idle.");
         game.StartCoroutine((IEnumerator)InvokeWithResult(game, "AnimateShot", true, false, true));
         var maximumOffset = 0f;
         var maximumTilt = 0f;
-        var maximumScaleChange = 0f;
-        for (var elapsed = 0f; elapsed < 3.15f; elapsed += Time.deltaTime)
+        var maximumBackwardOffset = 0f;
+        var maximumLateralOffset = 0f;
+        var voicePlayed = false;
+        var voiceSource = GameObject.Find("Doll Voice Source").GetComponent<AudioSource>();
+        for (var elapsed = 0f; elapsed < 4.35f; elapsed += Time.deltaTime)
         {
             maximumOffset = Mathf.Max(maximumOffset, Vector3.Distance(entityRestPosition, apparition.transform.localPosition));
             maximumTilt = Mathf.Max(maximumTilt, Vector3.Angle(Vector3.up, apparition.transform.up));
-            maximumScaleChange = Mathf.Max(maximumScaleChange, Vector3.Distance(entityRestScale, apparition.transform.localScale));
+            maximumBackwardOffset = Mathf.Max(maximumBackwardOffset, apparition.transform.localPosition.z - entityRestPosition.z);
+            maximumLateralOffset = Mathf.Max(maximumLateralOffset, Mathf.Abs(apparition.transform.localPosition.x - entityRestPosition.x));
+            voicePlayed |= voiceSource.isPlaying;
             yield return null;
         }
-        Assert.That(maximumOffset, Is.InRange(0.17f, 0.23f), "Apparition hit reaction is too weak or leaves its authored position.");
-        Assert.That(maximumTilt, Is.InRange(16f, 20f));
-        Assert.That(maximumScaleChange, Is.GreaterThan(0.15f), "Apparition does not distort on impact.");
-        Assert.That(Vector3.Distance(entityRestPosition, apparition.transform.localPosition), Is.LessThan(0.013f), "Apparition did not return to its small idle hover envelope.");
-        Debug.Log($"[ApparitionTransformTrace] hitOffset={maximumOffset:F4}m tilt={maximumTilt:F3}deg scaleDelta={maximumScaleChange:F4}");
+        Assert.That(maximumOffset, Is.InRange(0.30f, 0.34f), "The player-shot doll does not fall backward far enough.");
+        Assert.That(maximumTilt, Is.InRange(59f, 63f));
+        Assert.That(maximumBackwardOffset, Is.GreaterThan(0.27f));
+        Assert.That(maximumLateralOffset, Is.LessThan(0.03f));
+        Assert.That(voicePlayed, Is.True, "The doll did not vocalize when shot.");
+        Assert.That(Vector3.Distance(entityRestPosition, apparition.transform.localPosition), Is.LessThan(0.002f), "The surviving doll did not return to its fixed seat.");
+
+        ResetRound(game);
+        game.StartCoroutine((IEnumerator)InvokeWithResult(game, "AnimateShot", false, true, true));
+        var maximumSideOffset = 0f;
+        var selfShotBackwardOffset = 0f;
+        var selfShotTilt = 0f;
+        for (var elapsed = 0f; elapsed < 5.35f; elapsed += Time.deltaTime)
+        {
+            maximumSideOffset = Mathf.Max(maximumSideOffset, Mathf.Abs(apparition.transform.localPosition.x - entityRestPosition.x));
+            selfShotBackwardOffset = Mathf.Max(selfShotBackwardOffset, apparition.transform.localPosition.z - entityRestPosition.z);
+            selfShotTilt = Mathf.Max(selfShotTilt, Vector3.Angle(Vector3.up, apparition.transform.up));
+            yield return null;
+        }
+        Assert.That(maximumSideOffset, Is.GreaterThan(0.20f), "The self-shot doll did not fall sideways.");
+        Assert.That(selfShotBackwardOffset, Is.LessThan(0.09f), "The self-shot reaction incorrectly reused the backward fall.");
+        Assert.That(selfShotTilt, Is.InRange(65f, 70f));
+        Debug.Log($"[DollTransformTrace] backOffset={maximumBackwardOffset:F4}m backTilt={maximumTilt:F2}deg sideOffset={maximumSideOffset:F4}m sideTilt={selfShotTilt:F2}deg");
     }
 
     private static void ResetRound(ChamberLogicGame game)

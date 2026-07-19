@@ -1,4 +1,4 @@
-Both audio files in this folder are dedicated to the public domain under CC0.
+All audio files in this folder are dedicated to the public domain under CC0.
 
 Abandoned_Passages.ogg
 Title: Abandoned passages (horror ambience loop)
@@ -9,3 +9,8 @@ Creepy_Ambient_Layer.ogg
 Title: Creepy Ambient Loop
 Author: epb9000
 Source: https://opengameart.org/content/creepy-ambient-loop
+
+Doll_Spooky_Waltz.ogg
+Title: musicbox1_spooky_waltz (from 4 Music Box Tracks)
+Author: Aureolus_Omicron
+Source: https://opengameart.org/content/4-music-box-tracks

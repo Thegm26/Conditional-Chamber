@@ -32,8 +32,13 @@ public sealed class ChamberLogicGame : MonoBehaviour
     [SerializeField] private AudioSource mechanicalSource;
     [SerializeField] private AudioSource musicSource;
     [SerializeField] private AudioSource musicLayerSource;
+    [SerializeField] private AudioSource dollMusicSource;
+    [SerializeField] private AudioSource dollVoiceSource;
     [SerializeField] private AudioClip horrorMusicClip;
     [SerializeField] private AudioClip horrorMusicLayerClip;
+    [SerializeField] private AudioClip dollMusicClip;
+    [SerializeField] private AudioClip dollVoiceClip;
+    [SerializeField] private AudioClip dollFallClip;
     [SerializeField] private TextMesh roundRevealText;
     [SerializeField] private List<GameObject> shellProps = new List<GameObject>();
 
@@ -62,6 +67,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private Quaternion rightHandRestRotation;
     private Quaternion leftHandRestRotation;
     private bool dealerActing;
+    private bool lastDealerHitWasSelfInflicted;
     private Vector3 pumpRestPosition;
     private Quaternion pumpRestRotation;
 
@@ -72,7 +78,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
             weaponTableAnchor == null || playerAimDealerAnchor == null || playerAimSelfAnchor == null ||
             dealerAimPlayerAnchor == null || dealerAimSelfAnchor == null || weaponBreechAnchor == null || weaponPump == null ||
             audioSource == null || ambientSource == null || mechanicalSource == null || musicSource == null || musicLayerSource == null ||
-            horrorMusicClip == null || horrorMusicLayerClip == null)
+            dollMusicSource == null || dollVoiceSource == null || horrorMusicClip == null || horrorMusicLayerClip == null ||
+            dollMusicClip == null || dollVoiceClip == null || dollFallClip == null)
         {
             Debug.LogError("Chamber scene references are incomplete. The saved Chamber scene needs repair.");
             enabled = false;
@@ -113,6 +120,10 @@ public sealed class ChamberLogicGame : MonoBehaviour
         musicLayerSource.loop = true;
         musicLayerSource.volume = 0.14f;
         musicLayerSource.Play();
+        dollMusicSource.clip = dollMusicClip;
+        dollMusicSource.loop = true;
+        dollMusicSource.volume = 0.12f;
+        dollMusicSource.Play();
         StartExperiment();
     }
 
@@ -131,12 +142,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         {
             duelCamera.localPosition = cameraRestPosition + new Vector3(Mathf.Sin(time * 0.37f) * 0.008f, Mathf.Sin(time * 0.83f) * 0.012f, 0f);
             duelCamera.localRotation = cameraRestRotation * Quaternion.Euler(Mathf.Sin(time * 0.44f) * 0.18f, Mathf.Sin(time * 0.29f) * 0.22f, 0f);
-        }
-
-        if (dealerEntity != null && !dealerActing)
-        {
-            dealerEntity.localPosition = entityRestPosition + Vector3.up * (Mathf.Sin(time * 0.72f) * 0.012f);
-            dealerEntity.localRotation = entityRestRotation * Quaternion.Euler(0f, Mathf.Sin(time * 0.48f) * 1.8f, 0f);
         }
 
         if (!introPlaying && !resolving && playerTurn && round != null)
@@ -159,6 +164,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
         report.Clear();
         report.Add("Round begins: 2 live and 4 blank shells.");
         dealerActing = false;
+        lastDealerHitWasSelfInflicted = false;
         ResetDealerEntity();
         ReleaseDealerHands();
         SetWeaponAt(weaponTableAnchor);
@@ -274,8 +280,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
         var liveBefore = round.RemainingLive;
         var totalBefore = round.RemainingTotal;
         var shell = round.Fire();
-        var actor = isPlayer ? "You" : "Dealer";
-        var target = targetsSelf ? actor : (isPlayer ? "Dealer" : "you");
+        var actor = isPlayer ? "You" : "Doll";
+        var target = targetsSelf ? actor : (isPlayer ? "Doll" : "you");
         var outcome = shell == Shell.Live ? "LIVE" : "BLANK";
         report.Add($"{actor} aimed at {target}: {outcome} [before: {liveBefore}/{totalBefore} live]");
 
@@ -382,7 +388,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
         if (dealerWasHit)
         {
             dealerActing = true;
-            yield return DealerHitReaction();
+            lastDealerHitWasSelfInflicted = !isPlayer && targetsSelf;
+            yield return DealerHitReaction(lastDealerHitWasSelfInflicted);
         }
 
         yield return MoveWeapon(weaponTableAnchor, 0.72f);
@@ -408,7 +415,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
     private IEnumerator PumpWeapon(float duration)
     {
-        var backPosition = pumpRestPosition + Vector3.down * 0.022f;
+        var backPosition = pumpRestPosition + Vector3.back * 0.075f;
         var backDuration = duration * 0.46f;
         mechanicalSource.PlayOneShot(shellLoadClip, 0.62f);
         for (var t = 0f; t < backDuration; t += Time.deltaTime)
@@ -433,8 +440,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
     {
         mechanicalSource.PlayOneShot(shellLoadClip, 0.76f);
         yield return MoveWeaponAction(pumpRestPosition, pumpRestRotation,
-            pumpRestPosition + Vector3.down * 0.022f,
-            pumpRestRotation * Quaternion.Euler(6f, 0f, 0f), duration);
+            pumpRestPosition + Vector3.back * 0.075f,
+            pumpRestRotation * Quaternion.Euler(2.5f, 0f, 0f), duration);
     }
 
     private IEnumerator CloseWeaponAction(float duration)
@@ -457,25 +464,36 @@ public sealed class ChamberLogicGame : MonoBehaviour
         weaponPump.localRotation = endRotation;
     }
 
-    private IEnumerator DealerHitReaction()
+    private IEnumerator DealerHitReaction(bool selfInflicted)
     {
-        var hitPosition = entityRestPosition + new Vector3(0f, 0.07f, 0.18f);
-        var hitRotation = entityRestRotation * Quaternion.Euler(-18f, 0f, 0f);
-        var hitScale = Vector3.Scale(entityRestScale, new Vector3(1.13f, 0.82f, 1.13f));
-        for (var t = 0f; t < 0.16f; t += Time.deltaTime)
+        dollVoiceSource.pitch = selfInflicted ? 0.82f : 0.72f;
+        dollVoiceSource.PlayOneShot(dollVoiceClip, 0.58f);
+        var fallenPosition = entityRestPosition + (selfInflicted
+            ? new Vector3(0.22f, -0.19f, 0.06f)
+            : new Vector3(0f, -0.14f, 0.29f));
+        var fallenRotation = entityRestRotation * (selfInflicted
+            ? Quaternion.Euler(-8f, 0f, -67f)
+            : Quaternion.Euler(-61f, 0f, 0f));
+        const float fallDuration = 0.42f;
+        for (var t = 0f; t < fallDuration; t += Time.deltaTime)
         {
-            var progress = Mathf.SmoothStep(0f, 1f, t / 0.16f);
-            dealerEntity.localPosition = Vector3.Lerp(entityRestPosition, hitPosition, progress);
-            dealerEntity.localRotation = Quaternion.Slerp(entityRestRotation, hitRotation, progress);
-            dealerEntity.localScale = Vector3.Lerp(entityRestScale, hitScale, progress);
+            var progress = Mathf.SmoothStep(0f, 1f, t / fallDuration);
+            dealerEntity.localPosition = Vector3.Lerp(entityRestPosition, fallenPosition, progress);
+            dealerEntity.localRotation = Quaternion.Slerp(entityRestRotation, fallenRotation, progress);
             yield return null;
         }
-        for (var t = 0f; t < 0.48f; t += Time.deltaTime)
+        dealerEntity.localPosition = fallenPosition;
+        dealerEntity.localRotation = fallenRotation;
+        dollVoiceSource.pitch = 0.9f;
+        dollVoiceSource.PlayOneShot(dollFallClip, 0.68f);
+        yield return new WaitForSeconds(0.44f);
+
+        const float recoveryDuration = 0.64f;
+        for (var t = 0f; t < recoveryDuration; t += Time.deltaTime)
         {
-            var progress = Mathf.SmoothStep(0f, 1f, t / 0.48f);
-            dealerEntity.localPosition = Vector3.Lerp(hitPosition, entityRestPosition, progress);
-            dealerEntity.localRotation = Quaternion.Slerp(hitRotation, entityRestRotation, progress);
-            dealerEntity.localScale = Vector3.Lerp(hitScale, entityRestScale, progress);
+            var progress = Mathf.SmoothStep(0f, 1f, t / recoveryDuration);
+            dealerEntity.localPosition = Vector3.Lerp(fallenPosition, entityRestPosition, progress);
+            dealerEntity.localRotation = Quaternion.Slerp(fallenRotation, entityRestRotation, progress);
             yield return null;
         }
         ResetDealerEntity();
@@ -483,9 +501,12 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
     private void ApplyDealerDefeatedPose()
     {
-        dealerEntity.localPosition = entityRestPosition + new Vector3(0f, -0.12f, 0.14f);
-        dealerEntity.localRotation = entityRestRotation * Quaternion.Euler(-22f, 0f, 0f);
-        dealerEntity.localScale = Vector3.Scale(entityRestScale, new Vector3(1.18f, 0.65f, 1.18f));
+        dealerEntity.localPosition = entityRestPosition + (lastDealerHitWasSelfInflicted
+            ? new Vector3(0.22f, -0.19f, 0.06f)
+            : new Vector3(0f, -0.14f, 0.29f));
+        dealerEntity.localRotation = entityRestRotation * (lastDealerHitWasSelfInflicted
+            ? Quaternion.Euler(-8f, 0f, -67f)
+            : Quaternion.Euler(-61f, 0f, 0f));
     }
 
     private IEnumerator MoveDealerHandsToWeapon(bool targetsSelf, float duration)

@@ -44,3 +44,16 @@ Assets/Editor/*Audit.cs
 Assets/Editor/*Audit.cs.meta
 
 # Keep active Unity .meta files tracked: scenes and prefabs reference their GUIDs.
+
+# Local Unity Asset Store imports. The public repository must not redistribute
+# publishers' raw source assets covered by the Standard Asset Store EULA.
+Assets/DarkDropStudio/
+Assets/DarkDropStudio.meta
+Assets/Audios/
+Assets/Audios.meta
+Assets/Low Poly ShotGun Weapon Pack 1/
+Assets/Low Poly ShotGun Weapon Pack 1.meta
+Assets/Resources/ImportedShotgun/
+Assets/Resources/ImportedShotgun.meta
+Assets/Resources/ImportedVoices/
+Assets/Resources/ImportedVoices.meta
