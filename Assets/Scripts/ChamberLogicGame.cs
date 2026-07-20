@@ -29,7 +29,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
     [SerializeField] private Light overheadLight;
     [SerializeField] private Light dealerRimLight;
     [SerializeField] private AudioSource audioSource;
-    [SerializeField] private AudioSource ambientSource;
     [SerializeField] private AudioSource mechanicalSource;
     [SerializeField] private AudioSource musicSource;
     [SerializeField] private AudioSource musicLayerSource;
@@ -42,6 +41,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
     [SerializeField] private AudioClip dollFallClip;
     [SerializeField] private AudioClip liveShotClip;
     [SerializeField] private AudioClip blankClickClip;
+    [SerializeField] private AudioClip shellLoadClip;
     [SerializeField] private TextMesh roundRevealText;
     [SerializeField] private List<GameObject> shellProps = new List<GameObject>();
 
@@ -51,7 +51,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private readonly List<Quaternion> shellRestRotations = new List<Quaternion>();
     private readonly List<Transform> shellRestParents = new List<Transform>();
     private readonly System.Random seedSource = new System.Random();
-    private AudioClip shellLoadClip;
     private int playerHealth;
     private int dealerHealth;
     private bool playerTurn;
@@ -68,7 +67,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private Vector3 leftHandRestPosition;
     private Quaternion rightHandRestRotation;
     private Quaternion leftHandRestRotation;
-    private bool dealerActing;
     private bool lastDealerHitWasSelfInflicted;
     private Vector3 pumpRestPosition;
     private Quaternion pumpRestRotation;
@@ -113,9 +111,10 @@ public sealed class ChamberLogicGame : MonoBehaviour
             dealerRightGrip == null || dealerLeftGrip == null || dealerSelfRightGrip == null || dealerSelfLeftGrip == null ||
             weaponTableAnchor == null || openingLoadAnchor == null || playerAimDealerAnchor == null || playerAimSelfAnchor == null ||
             dealerAimPlayerAnchor == null || dealerAimSelfAnchor == null || weaponBreechAnchor == null || weaponPump == null ||
-            audioSource == null || ambientSource == null || mechanicalSource == null || musicSource == null || musicLayerSource == null ||
+            audioSource == null || mechanicalSource == null || musicSource == null || musicLayerSource == null ||
             dollMusicSource == null || dollVoiceSource == null || horrorMusicClip == null || horrorMusicLayerClip == null ||
-            dollMusicClip == null || dollVoiceClip == null || dollFallClip == null || liveShotClip == null || blankClickClip == null)
+            dollMusicClip == null || dollVoiceClip == null || dollFallClip == null || liveShotClip == null ||
+            blankClickClip == null || shellLoadClip == null)
         {
             Debug.LogError("Chamber scene references are incomplete. The saved Chamber scene needs repair.");
             enabled = false;
@@ -150,11 +149,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
             shellRestRotations.Add(shell.transform.localRotation);
         }
 
-        shellLoadClip = CreateMechanicalClip();
-        ambientSource.clip = CreateAmbientClip();
-        ambientSource.loop = true;
-        ambientSource.volume = 0.28f;
-        ambientSource.Play();
         musicSource.clip = horrorMusicClip;
         musicSource.loop = true;
         musicSource.volume = 0.24f;
@@ -206,7 +200,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         introPlaying = true;
         report.Clear();
         report.Add("Round begins: 2 live and 4 blank shells.");
-        dealerActing = false;
         lastDealerHitWasSelfInflicted = false;
         ResetDealerEntity();
         ReleaseDealerHands();
@@ -332,7 +325,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
             }
             if (dealerHealth <= 0)
             {
-                dealerActing = true;
                 ReleaseDealerHands();
                 ApplyDealerDefeatedPose();
             }
@@ -384,13 +376,11 @@ public sealed class ChamberLogicGame : MonoBehaviour
 
         if (isPlayer)
         {
-            dealerActing = true;
             ResetDealerEntity();
             yield return new WaitForSeconds(0.22f);
         }
         else
         {
-            dealerActing = true;
             ResetDealerEntity();
             yield return MoveDealerHandsToWeapon(targetsSelf, 0.52f);
         }
@@ -421,7 +411,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         var dealerWasHit = live && ((isPlayer && !targetsSelf) || (!isPlayer && targetsSelf));
         if (dealerWasHit)
         {
-            dealerActing = true;
             lastDealerHitWasSelfInflicted = !isPlayer && targetsSelf;
             yield return DealerHitReaction(lastDealerHitWasSelfInflicted);
         }
@@ -429,7 +418,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         yield return MoveWeapon(weaponTableAnchor, 0.72f);
         if (!isPlayer) yield return ReturnDealerHands(0.42f);
         ResetDealerEntity();
-        dealerActing = false;
     }
 
     private IEnumerator MoveWeapon(Transform destination, float duration)
@@ -805,44 +793,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         playerWeapon.SetParent(anchor, true);
         playerWeapon.localPosition = Vector3.zero;
         playerWeapon.localRotation = Quaternion.identity;
-    }
-
-    private static AudioClip CreateMechanicalClip()
-    {
-        const int sampleRate = 44100;
-        var frames = Mathf.CeilToInt(sampleRate * 0.16f);
-        var samples = new float[frames];
-        var random = new System.Random(4407);
-        for (var i = 0; i < frames; i++)
-        {
-            var t = (float)i / sampleRate;
-            var strike = Mathf.Exp(-t * 54f) * Mathf.Sin(t * Mathf.PI * 2f * 780f) * 0.34f;
-            var slide = t > 0.025f ? Mathf.Exp(-(t - 0.025f) * 30f) * (float)(random.NextDouble() * 2.0 - 1.0) * 0.12f : 0f;
-            samples[i] = strike + slide;
-        }
-        var clip = AudioClip.Create("Shell chamber mechanism", frames, 1, sampleRate, false);
-        clip.SetData(samples, 0);
-        return clip;
-    }
-
-    private static AudioClip CreateAmbientClip()
-    {
-        const int sampleRate = 22050;
-        var samples = new float[sampleRate * 12];
-        var random = new System.Random(7182);
-        var smoothedNoise = 0f;
-        for (var i = 0; i < samples.Length; i++)
-        {
-            var t = (float)i / sampleRate;
-            smoothedNoise = Mathf.Lerp(smoothedNoise, (float)(random.NextDouble() * 2.0 - 1.0), 0.004f);
-            var drone = Mathf.Sin(t * 2f * Mathf.PI * 43.65f) * 0.14f + Mathf.Sin(t * 2f * Mathf.PI * 55f) * 0.07f;
-            var pulsePhase = t % 3.2f;
-            var pulse = pulsePhase < 0.23f ? Mathf.Sin(t * 2f * Mathf.PI * 38f) * Mathf.Exp(-pulsePhase * 15f) * 0.19f : 0f;
-            samples[i] = (drone + pulse + smoothedNoise * 0.035f) * 0.5f;
-        }
-        var clip = AudioClip.Create("The chamber breathes", samples.Length, 1, sampleRate, false);
-        clip.SetData(samples, 0);
-        return clip;
     }
 
 }

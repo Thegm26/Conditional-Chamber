@@ -151,7 +151,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(dollBounds.min.z - face.position.z, Is.InRange(0.005f, 0.045f));
         Assert.That(GameObject.Find("Horror Package Hanging Shroud"), Is.Null);
         Assert.That(GameObject.Find("Apparition Scary Face"), Is.Null);
-        Assert.That(Object.FindAnyObjectByType<ChamberPoseDebug>(), Is.Not.Null, "Scene-space aim lines are missing.");
+        Assert.That(Object.FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None), Is.Empty,
+            "Static scene colliders are unnecessary because the chamber has no physics interactions.");
 
         Assert.That(GameObject.Find("Horror Package — Authored Dressing"), Is.Not.Null);
         Assert.That(GameObject.Find("Horror Coffin — Back Right"), Is.Not.Null);
@@ -171,6 +172,7 @@ public sealed class ChamberScenePlayTests
         var mainMusic = (AudioSource)typeof(ChamberLogicGame).GetField("musicSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         var liveShot = (AudioClip)typeof(ChamberLogicGame).GetField("liveShotClip", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         var blankClick = (AudioClip)typeof(ChamberLogicGame).GetField("blankClickClip", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
+        var actionClip = (AudioClip)typeof(ChamberLogicGame).GetField("shellLoadClip", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         var layeredMusic = GameObject.Find("Horror Music Layer").GetComponent<AudioSource>();
         var dollMusic = GameObject.Find("Doll Music Box").GetComponent<AudioSource>();
         Assert.That(mainMusic.clip.name, Is.EqualTo("Creepy_Ambient_Layer"));
@@ -181,6 +183,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(liveShot.channels, Is.EqualTo(2));
         Assert.That(blankClick.name, Is.EqualTo("Shotgun_Dry_Click"));
         Assert.That(blankClick.length, Is.InRange(0.3f, 0.4f), "Blank fire is not using the short mechanical click asset.");
+        Assert.That(actionClip.name, Is.EqualTo("Shotgun_Action"));
+        Assert.That(actionClip.length, Is.InRange(0.5f, 0.7f));
         Assert.That(mainMusic.isPlaying, Is.True);
         Assert.That(layeredMusic.isPlaying, Is.True);
         Assert.That(dollMusic.isPlaying, Is.True);
@@ -295,8 +299,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(Quaternion.Angle(Quaternion.identity, FindDescendant(leftHand, "Middle2").localRotation), Is.GreaterThan(42f), "Left fingers did not curl around the fore grip.");
         Assert.That(Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position), Is.LessThan(rightOpenFingerSpan * 0.86f), "Right index finger curled away from the palm.");
         Assert.That(Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position), Is.LessThan(leftOpenFingerSpan * 0.86f), "Left middle finger curled away from the palm.");
-        AssertHandWrapsGrip("dealer-player-right", shotgun, GameObject.Find("Shotgun Rear Grip Debug Point").transform, rightHand);
-        AssertHandWrapsGrip("dealer-player-left", shotgun, GameObject.Find("Shotgun Fore Grip Debug Point").transform, leftHand);
+        AssertHandWrapsGrip("dealer-player-right", shotgun, rightGrip, rightHand);
+        AssertHandWrapsGrip("dealer-player-left", shotgun, leftGrip, leftHand);
         Debug.Log($"[HandGripTrace] gunRotation={maximumAimRotation:F1}deg rightSpan={Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position):F3}/{rightOpenFingerSpan:F3}m leftSpan={Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position):F3}/{leftOpenFingerSpan:F3}m");
         var rearHandAxisError = Mathf.Min(Vector3.Angle(rightHand.up, muzzle.forward), Vector3.Angle(-rightHand.up, muzzle.forward));
         Assert.That(rearHandAxisError, Is.LessThan(12f), "Rear hand is not aligned along the shotgun stock.");
@@ -319,8 +323,8 @@ public sealed class ChamberScenePlayTests
         var selfLeftGrip = GameObject.Find("Apparition Self Left Grip").transform;
         Assert.That(Vector3.Distance(rightHand.position, selfRightGrip.position), Is.LessThan(0.001f));
         Assert.That(Vector3.Distance(leftHand.position, selfLeftGrip.position), Is.LessThan(0.001f));
-        AssertHandWrapsGrip("dealer-self-right", shotgun, GameObject.Find("Shotgun Self Right Contact").transform, rightHand);
-        AssertHandWrapsGrip("dealer-self-left", shotgun, GameObject.Find("Shotgun Self Left Contact").transform, leftHand);
+        AssertHandWrapsGrip("dealer-self-right", shotgun, selfRightGrip, rightHand);
+        AssertHandWrapsGrip("dealer-self-left", shotgun, selfLeftGrip, leftHand);
         Assert.That(muzzle.position.x - face.position.x, Is.InRange(0.29f, 0.35f), "Self-aim muzzle is not beside the doll's head.");
         Assert.That(Mathf.Abs(muzzle.position.y - face.position.y), Is.LessThan(0.025f));
         Assert.That(Mathf.Abs(muzzle.position.z - face.position.z), Is.LessThan(0.04f));
