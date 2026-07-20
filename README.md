@@ -10,7 +10,7 @@ The public source repository intentionally excludes raw Unity Asset Store files.
 
 The saved scene is directly authored: DarkDrop Studio's textured Voodoo Doll sits fixed in the dealer chair while two black rigged hands remain hidden below the table until they reach for the weapon. Six approximately 69 mm shells rest on a three-crate stand beside the table. During the slow reveal, both hands grip and lift the shotgun into a dedicated loading pose, the supporting hand holds it open, and the loading hand closes its fingers around each shell before carrying it directly into the loading port. It re-grips the gun before both hands lower it flat onto the table. The hands later hold the ShotGun C model low at the doll's side when aiming at the player and place the muzzle beside the doll's head for a self-shot. A live hit makes the doll collapse mostly straight down, remain down for about 2.5 seconds, and recover if it still has health. Recoil, muzzle flash, camera impact, a spatial ghost-child vocal, a bone-impact fall, layered gun audio, dark ambience, and a quiet spooky music box support the reactions.
 
-Use `1` to aim at the dealer, `2` to aim at yourself, and `R` to restart. In Scene view, `ChamberPoseDebug` draws colored grip points and muzzle-to-face lines for all four authored firing poses; its context menu can log positions, distances, and angular error.
+Use `1` to aim at the dealer, `2` to aim at yourself, and `R` to restart. Play Mode tests log transform measurements for the table, shotgun, grip points, muzzle-to-face aim, loading path, and doll reactions so pose problems can be diagnosed numerically.
 
 ## Lesson
 
