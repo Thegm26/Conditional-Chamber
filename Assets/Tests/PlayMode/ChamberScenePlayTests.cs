@@ -43,6 +43,8 @@ public sealed class ChamberScenePlayTests
         var weaponLiftedByBothHands = false;
         var maximumWeaponLift = 0f;
         var minimumShellToPortDistance = float.MaxValue;
+        var shellAxisErrorAtPort = 180f;
+        var shellPinchDistanceAtPort = float.MaxValue;
         for (var elapsed = 0f; elapsed < 2.85f; elapsed += Time.deltaTime)
         {
             bothHandsTookWeapon |= loadingHand.parent == rearGrip && supportHand.parent == foreGrip;
@@ -55,7 +57,16 @@ public sealed class ChamberScenePlayTests
             {
                 var handToShellDistance = Vector3.Distance(loadingHandRenderer.bounds.center, firstShellRenderer.bounds.center);
                 minimumHandToShellDistance = Mathf.Min(minimumHandToShellDistance, handToShellDistance);
-                minimumShellToPortDistance = Mathf.Min(minimumShellToPortDistance, Vector3.Distance(firstShell.position, loadingPort.position));
+                var shellToPortDistance = Vector3.Distance(firstShell.position, loadingPort.position);
+                if (shellToPortDistance < minimumShellToPortDistance)
+                {
+                    minimumShellToPortDistance = shellToPortDistance;
+                    shellAxisErrorAtPort = Quaternion.Angle(firstShell.rotation, loadingPort.rotation);
+                    shellPinchDistanceAtPort = DistanceToSegment(
+                        firstShell.position,
+                        FindDescendant(loadingHand, "Thumb2").position,
+                        FindDescendant(loadingHand, "Index3").position);
+                }
                 if (Vector3.Distance(shellStartPosition, firstShell.position) > 0.03f && handToShellDistance > 0.14f)
                     shellMovedWithoutHand = true;
                 if (Vector3.Distance(shellStartPosition, firstShell.position) > 0.03f && supportHand.parent != foreGrip)
@@ -72,6 +83,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(maximumWeaponLift, Is.GreaterThan(0.30f), "The shotgun barely left the table.");
         Assert.That(Vector3.Distance(loadingPose.position, shotgun.position), Is.LessThan(0.03f), "Shotgun missed the authored loading pose.");
         Assert.That(minimumShellToPortDistance, Is.LessThan(0.015f), "The shell never entered the shotgun loading port.");
+        Assert.That(shellAxisErrorAtPort, Is.LessThan(1f), "The shell entered the breech sideways.");
+        Assert.That(shellPinchDistanceAtPort, Is.LessThan(0.03f), "The shell was not held between the loading fingers at the breech.");
         Assert.That(shellMovedWithoutGunSupport, Is.False, "The supporting hand released the shotgun during loading.");
 
         yield return new WaitForSeconds(10.8f);
@@ -81,7 +94,7 @@ public sealed class ChamberScenePlayTests
         Assert.That(Vector3.Distance(shotgunTablePosition, shotgun.position), Is.LessThan(0.002f), "Shotgun was not lowered back onto the table.");
         Assert.That(Quaternion.Angle(shotgunTableRotation, shotgun.rotation), Is.LessThan(0.1f));
         Assert.That(game.enabled, Is.True);
-        Debug.Log($"[OpeningTransformTrace] gunLift={maximumWeaponLift:F3}m pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m handGrip={minimumHandToShellDistance:F3}m portError={minimumShellToPortDistance:F3}m start={shellStartPosition}");
+        Debug.Log($"[OpeningTransformTrace] gunLift={maximumWeaponLift:F3}m pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m handGrip={minimumHandToShellDistance:F3}m portError={minimumShellToPortDistance:F3}m shellAxis={shellAxisErrorAtPort:F2}deg pinch={shellPinchDistanceAtPort:F3}m start={shellStartPosition}");
     }
 
     [UnityTest]
@@ -247,9 +260,9 @@ public sealed class ChamberScenePlayTests
         Assert.That(Quaternion.Angle(Quaternion.identity, FindDescendant(leftHand, "Middle2").localRotation), Is.GreaterThan(42f), "Left fingers did not curl around the fore grip.");
         Assert.That(Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position), Is.LessThan(rightOpenFingerSpan * 0.86f), "Right index finger curled away from the palm.");
         Assert.That(Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position), Is.LessThan(leftOpenFingerSpan * 0.86f), "Left middle finger curled away from the palm.");
-        Assert.That(BoundsSeparation(CombinedBounds(rightHand.gameObject), CombinedBounds(shotgun.gameObject)), Is.LessThan(0.025f), "Right hand does not contact the shotgun.");
-        Assert.That(BoundsSeparation(CombinedBounds(leftHand.gameObject), CombinedBounds(shotgun.gameObject)), Is.LessThan(0.025f), "Left hand does not contact the shotgun.");
-        Debug.Log($"[HandGripTrace] rightSpan={Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position):F3}/{rightOpenFingerSpan:F3}m leftSpan={Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position):F3}/{leftOpenFingerSpan:F3}m rightContact={BoundsSeparation(CombinedBounds(rightHand.gameObject), CombinedBounds(shotgun.gameObject)):F3}m leftContact={BoundsSeparation(CombinedBounds(leftHand.gameObject), CombinedBounds(shotgun.gameObject)):F3}m");
+        AssertHandWrapsGrip("dealer-player-right", shotgun, GameObject.Find("Shotgun Rear Grip Debug Point").transform, rightHand);
+        AssertHandWrapsGrip("dealer-player-left", shotgun, GameObject.Find("Shotgun Fore Grip Debug Point").transform, leftHand);
+        Debug.Log($"[HandGripTrace] rightSpan={Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position):F3}/{rightOpenFingerSpan:F3}m leftSpan={Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position):F3}/{leftOpenFingerSpan:F3}m");
         var rearHandAxisError = Mathf.Min(Vector3.Angle(rightHand.up, muzzle.forward), Vector3.Angle(-rightHand.up, muzzle.forward));
         Assert.That(rearHandAxisError, Is.LessThan(12f), "Rear hand is not aligned along the shotgun stock.");
         Assert.That(Vector3.Angle(leftHand.up, muzzle.forward), Is.InRange(75f, 105f), "Fore hand is not wrapped across the fore-end.");
@@ -271,6 +284,8 @@ public sealed class ChamberScenePlayTests
         var selfLeftGrip = GameObject.Find("Apparition Self Left Grip").transform;
         Assert.That(Vector3.Distance(rightHand.position, selfRightGrip.position), Is.LessThan(0.001f));
         Assert.That(Vector3.Distance(leftHand.position, selfLeftGrip.position), Is.LessThan(0.001f));
+        AssertHandWrapsGrip("dealer-self-right", shotgun, GameObject.Find("Shotgun Self Right Contact").transform, rightHand);
+        AssertHandWrapsGrip("dealer-self-left", shotgun, GameObject.Find("Shotgun Self Left Contact").transform, leftHand);
         Assert.That(muzzle.position.x - face.position.x, Is.InRange(0.29f, 0.35f), "Self-aim muzzle is not beside the doll's head.");
         Assert.That(Mathf.Abs(muzzle.position.y - face.position.y), Is.LessThan(0.025f));
         Assert.That(Mathf.Abs(muzzle.position.z - face.position.z), Is.LessThan(0.04f));
@@ -371,11 +386,45 @@ public sealed class ChamberScenePlayTests
         return null;
     }
 
-    private static float BoundsSeparation(Bounds a, Bounds b)
+    private static float DistanceToSegment(Vector3 point, Vector3 start, Vector3 end)
     {
-        var dx = Mathf.Max(0f, Mathf.Max(a.min.x - b.max.x, b.min.x - a.max.x));
-        var dy = Mathf.Max(0f, Mathf.Max(a.min.y - b.max.y, b.min.y - a.max.y));
-        var dz = Mathf.Max(0f, Mathf.Max(a.min.z - b.max.z, b.min.z - a.max.z));
-        return new Vector3(dx, dy, dz).magnitude;
+        var segment = end - start;
+        var progress = Mathf.Clamp01(Vector3.Dot(point - start, segment) / segment.sqrMagnitude);
+        return Vector3.Distance(point, start + segment * progress);
+    }
+
+    private static void AssertHandWrapsGrip(string label, Transform weapon, Transform contact, Transform hand)
+    {
+        var palm = FindDescendant(hand, "Hand");
+        var thumb = FindDescendant(hand, "Thumb2");
+        var fingertips = new[]
+        {
+            FindDescendant(hand, "Index3"),
+            FindDescendant(hand, "Middle3"),
+            FindDescendant(hand, "Ring3"),
+            FindDescendant(hand, "Little3")
+        };
+        Assert.That(palm, Is.Not.Null, $"{label}: palm bone is missing.");
+        Assert.That(thumb, Is.Not.Null, $"{label}: thumb bone is missing.");
+        Assert.That(fingertips, Has.None.Null, $"{label}: a fingertip bone is missing.");
+
+        var palmDistance = Vector3.Distance(palm.position, contact.position);
+        var nearestFingerDistance = float.MaxValue;
+        var nearestWrapDistance = float.MaxValue;
+        var furthestFingerDistance = 0f;
+        foreach (var fingertip in fingertips)
+        {
+            var fingerDistance = Vector3.Distance(fingertip.position, contact.position);
+            nearestFingerDistance = Mathf.Min(nearestFingerDistance, fingerDistance);
+            furthestFingerDistance = Mathf.Max(furthestFingerDistance, fingerDistance);
+            nearestWrapDistance = Mathf.Min(nearestWrapDistance,
+                DistanceToSegment(contact.position, thumb.position, fingertip.position));
+        }
+
+        Assert.That(palmDistance, Is.LessThan(0.075f), $"{label}: palm misses the authored grip center.");
+        Assert.That(nearestFingerDistance, Is.LessThan(0.055f), $"{label}: no fingertip reaches the grip.");
+        Assert.That(furthestFingerDistance, Is.LessThan(0.10f), $"{label}: fingers float away from the weapon.");
+        Assert.That(nearestWrapDistance, Is.LessThan(0.055f), $"{label}: grip center is not enclosed between thumb and fingers.");
+        Debug.Log($"[GripGeometry] {label} contact={weapon.InverseTransformPoint(contact.position)} palmDistance={palmDistance:F3}m nearestFinger={nearestFingerDistance:F3}m furthestFinger={furthestFingerDistance:F3}m wrapError={nearestWrapDistance:F3}m");
     }
 }
