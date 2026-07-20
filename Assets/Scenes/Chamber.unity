@@ -1877,8 +1877,8 @@ Light:
   serializedVersion: 13
   m_Type: 0
   m_Color: {r: 0.72, g: 0.035, b: 0.018, a: 1}
-  m_Intensity: 3.1
-  m_Range: 2.4
+  m_Intensity: 3.7
+  m_Range: 2.8
   m_SpotAngle: 54
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -9139,8 +9139,8 @@ Light:
   serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 0.62, b: 0.34, a: 1}
-  m_Intensity: 0.65
-  m_Range: 5.2
+  m_Intensity: 1.15
+  m_Range: 5.8
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -9744,6 +9744,8 @@ MonoBehaviour:
   dollMusicClip: {fileID: 8300000, guid: d5775e2c46c786dd3aefed102cdc9953, type: 3}
   dollVoiceClip: {fileID: 8300000, guid: 69f172aa74536174f8a9b47751f2c026, type: 3}
   dollFallClip: {fileID: 8300000, guid: 003a43af4af8c364083f3b391ade57d5, type: 3}
+  liveShotClip: {fileID: 8300000, guid: 105ab8230a467e02b88c025a807c229d, type: 3}
+  blankClickClip: {fileID: 8300000, guid: 082dee6b992673da4a380fe057f1521c, type: 3}
   roundRevealText: {fileID: 144943913}
   shellProps:
   - {fileID: 1167306106}
@@ -15366,10 +15368,10 @@ Light:
   serializedVersion: 13
   m_Type: 0
   m_Color: {r: 0.52, g: 0.61, b: 0.72, a: 1}
-  m_Intensity: 3.8
-  m_Range: 4
-  m_SpotAngle: 66
-  m_InnerSpotAngle: 38
+  m_Intensity: 5.2
+  m_Range: 4.8
+  m_SpotAngle: 76
+  m_InnerSpotAngle: 44
   m_CookieSize2D: {x: 0.5, y: 0.5}
   m_Shadows:
     m_Type: 2
@@ -15509,7 +15511,7 @@ Light:
   serializedVersion: 13
   m_Type: 2
   m_Color: {r: 0.8, g: 0.025, b: 0.018, a: 1}
-  m_Intensity: 2.4
+  m_Intensity: 3
   m_Range: 4.2
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208

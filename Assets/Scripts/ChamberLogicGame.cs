@@ -40,6 +40,8 @@ public sealed class ChamberLogicGame : MonoBehaviour
     [SerializeField] private AudioClip dollMusicClip;
     [SerializeField] private AudioClip dollVoiceClip;
     [SerializeField] private AudioClip dollFallClip;
+    [SerializeField] private AudioClip liveShotClip;
+    [SerializeField] private AudioClip blankClickClip;
     [SerializeField] private TextMesh roundRevealText;
     [SerializeField] private List<GameObject> shellProps = new List<GameObject>();
 
@@ -49,8 +51,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
     private readonly List<Quaternion> shellRestRotations = new List<Quaternion>();
     private readonly List<Transform> shellRestParents = new List<Transform>();
     private readonly System.Random seedSource = new System.Random();
-    private AudioClip liveShotClip;
-    private AudioClip blankClickClip;
     private AudioClip shellLoadClip;
     private int playerHealth;
     private int dealerHealth;
@@ -115,7 +115,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
             dealerAimPlayerAnchor == null || dealerAimSelfAnchor == null || weaponBreechAnchor == null || weaponPump == null ||
             audioSource == null || ambientSource == null || mechanicalSource == null || musicSource == null || musicLayerSource == null ||
             dollMusicSource == null || dollVoiceSource == null || horrorMusicClip == null || horrorMusicLayerClip == null ||
-            dollMusicClip == null || dollVoiceClip == null || dollFallClip == null)
+            dollMusicClip == null || dollVoiceClip == null || dollFallClip == null || liveShotClip == null || blankClickClip == null)
         {
             Debug.LogError("Chamber scene references are incomplete. The saved Chamber scene needs repair.");
             enabled = false;
@@ -150,8 +150,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
             shellRestRotations.Add(shell.transform.localRotation);
         }
 
-        liveShotClip = CreateShotClip("Layered shotgun report", 1.05f, true);
-        blankClickClip = CreateShotClip("Dry chamber click", 0.24f, false);
         shellLoadClip = CreateMechanicalClip();
         ambientSource.clip = CreateAmbientClip();
         ambientSource.loop = true;
@@ -179,9 +177,9 @@ public sealed class ChamberLogicGame : MonoBehaviour
         {
             var unstable = Mathf.PerlinNoise(time * 7.5f, 0.37f);
             var dropout = Mathf.PerlinNoise(time * 1.3f, 4.1f) > 0.91f ? 0.22f : 1f;
-            overheadLight.intensity = (1.15f + unstable * 0.72f) * dropout;
+            overheadLight.intensity = (2.35f + unstable * 1.1f) * Mathf.Max(dropout, 0.55f);
         }
-        if (dealerRimLight != null) dealerRimLight.intensity = 2.65f + Mathf.Sin(time * 0.72f) * 0.42f;
+        if (dealerRimLight != null) dealerRimLight.intensity = 3.35f + Mathf.Sin(time * 0.72f) * 0.5f;
 
         if (!introPlaying)
         {
@@ -409,7 +407,7 @@ public sealed class ChamberLogicGame : MonoBehaviour
             yield return new WaitForSeconds(0.22f);
         }
 
-        audioSource.PlayOneShot(live ? liveShotClip : blankClickClip, live ? 0.9f : 0.68f);
+        audioSource.PlayOneShot(live ? liveShotClip : blankClickClip, live ? 1f : 0.82f);
         if (live && muzzleFlash != null) muzzleFlash.intensity = 9f;
         var aimPosition = playerWeapon.position;
         playerWeapon.position += aimAnchor.forward * (live ? 0.16f : 0.035f);
@@ -613,7 +611,10 @@ public sealed class ChamberLogicGame : MonoBehaviour
         var startingCurl = shellIndex == 0 ? 1f : 0.68f;
         yield return MoveHandWorldWithPose(dealerRightHand, pickupPosition, pickupRotation, 0.34f, 0.035f,
             startingCurl, 0.08f, true);
-        yield return AnimateHandPose(dealerRightHand, 0.08f, 0.68f, true, 0.14f);
+        yield return AnimateHandPose(dealerRightHand, 0.08f, 0.72f, true, 0.22f);
+        // The fingers visibly close while the shell is still on its stand.
+        // Only after this hold does the shell become a child of the hand.
+        yield return new WaitForSeconds(0.12f);
 
         shellTransform.SetParent(dealerRightHand, true);
         var shellLocalPosition = shellTransform.localPosition;
@@ -621,12 +622,12 @@ public sealed class ChamberLogicGame : MonoBehaviour
         var approach = weaponBreechAnchor.position - weaponBreechAnchor.forward * 0.105f;
         GetHandPoseForShell(shellLocalPosition, shellLocalRotation, approach, weaponBreechAnchor.rotation,
             out var approachHandPosition, out var approachHandRotation);
-        yield return MoveHandWorld(dealerRightHand, approachHandPosition, approachHandRotation, 0.38f, 0.055f);
+        yield return MoveHandWorld(dealerRightHand, approachHandPosition, approachHandRotation, 0.48f, 0.055f);
 
         mechanicalSource.PlayOneShot(shellLoadClip, 0.52f);
         GetHandPoseForShell(shellLocalPosition, shellLocalRotation, weaponBreechAnchor.position, weaponBreechAnchor.rotation,
             out var insertHandPosition, out var insertHandRotation);
-        yield return MoveHandWorld(dealerRightHand, insertHandPosition, insertHandRotation, 0.18f, 0f);
+        yield return MoveHandWorld(dealerRightHand, insertHandPosition, insertHandRotation, 0.28f, 0f);
 
         if (shellIndex < shellRestParents.Count) shellTransform.SetParent(shellRestParents[shellIndex], true);
         shell.SetActive(false);
@@ -804,44 +805,6 @@ public sealed class ChamberLogicGame : MonoBehaviour
         playerWeapon.SetParent(anchor, true);
         playerWeapon.localPosition = Vector3.zero;
         playerWeapon.localRotation = Quaternion.identity;
-    }
-
-    private static AudioClip CreateShotClip(string name, float duration, bool live)
-    {
-        const int sampleRate = 44100;
-        var frames = Mathf.CeilToInt(duration * sampleRate);
-        var samples = new float[frames * 2];
-        var random = new System.Random(live ? 31415 : 92653);
-        for (var i = 0; i < frames; i++)
-        {
-            var t = (float)i / sampleRate;
-            var noiseL = (float)(random.NextDouble() * 2.0 - 1.0);
-            var noiseR = (float)(random.NextDouble() * 2.0 - 1.0);
-            float left;
-            float right;
-            if (live)
-            {
-                var crack = Mathf.Exp(-t * 72f);
-                var boom = Mathf.Sin(t * Mathf.PI * 2f * (74f - t * 18f)) * Mathf.Exp(-t * 6.2f);
-                var blast = Mathf.Exp(-t * 13f);
-                var reflection = t > 0.075f ? Mathf.Exp(-(t - 0.075f) * 8f) * 0.18f : 0f;
-                left = noiseL * crack * 0.72f + boom * 0.56f + noiseL * blast * 0.28f + noiseR * reflection;
-                right = noiseR * crack * 0.69f + boom * 0.58f + noiseR * blast * 0.27f + noiseL * reflection * 0.92f;
-            }
-            else
-            {
-                var snap = Mathf.Exp(-t * 48f);
-                var metal = Mathf.Sin(t * Mathf.PI * 2f * 1220f) * snap * 0.28f;
-                var clack = t > 0.035f ? Mathf.Sin((t - 0.035f) * Mathf.PI * 2f * 410f) * Mathf.Exp(-(t - 0.035f) * 35f) * 0.18f : 0f;
-                left = metal + clack + noiseL * snap * 0.08f;
-                right = metal * 0.92f + clack * 1.08f + noiseR * snap * 0.08f;
-            }
-            samples[i * 2] = Mathf.Clamp(left, -1f, 1f);
-            samples[i * 2 + 1] = Mathf.Clamp(right, -1f, 1f);
-        }
-        var clip = AudioClip.Create(name, frames, 2, sampleRate, false);
-        clip.SetData(samples, 0);
-        return clip;
     }
 
     private static AudioClip CreateMechanicalClip()

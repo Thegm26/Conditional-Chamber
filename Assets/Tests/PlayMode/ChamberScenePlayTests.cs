@@ -34,6 +34,8 @@ public sealed class ChamberScenePlayTests
         Assert.That(shellStartPosition.x, Is.LessThan(tableBounds.min.x), "Opening shell does not start beside the duel table.");
 
         yield return new WaitForSeconds(4.58f);
+        Assert.That(Vector3.Distance(firstShell.position, shellStartPosition), Is.LessThan(0.001f),
+            "The shells did not remain displayed and stationary during the opening reveal.");
         var maximumOpenTravel = 0f;
         var maximumShellTravel = 0f;
         var minimumHandToShellDistance = float.MaxValue;
@@ -44,9 +46,10 @@ public sealed class ChamberScenePlayTests
         var maximumWeaponLift = 0f;
         var maximumWeaponRotation = 0f;
         var minimumShellToPortDistance = float.MaxValue;
+        var handReachedShellBeforeMove = false;
         var shellAxisErrorAtPort = 180f;
         var shellPinchDistanceAtPort = float.MaxValue;
-        for (var elapsed = 0f; elapsed < 2.85f; elapsed += Time.deltaTime)
+        for (var elapsed = 0f; elapsed < 3.35f; elapsed += Time.deltaTime)
         {
             bothHandsTookWeapon |= loadingHand.parent == rearGrip && supportHand.parent == foreGrip;
             maximumWeaponLift = Mathf.Max(maximumWeaponLift, Vector3.Distance(shotgunTablePosition, shotgun.position));
@@ -57,6 +60,11 @@ public sealed class ChamberScenePlayTests
             maximumShellTravel = Mathf.Max(maximumShellTravel, Vector3.Distance(shellStartPosition, firstShell.position));
             if (firstShell.gameObject.activeSelf)
             {
+                var shellHasMoved = Vector3.Distance(shellStartPosition, firstShell.position) > 0.003f;
+                var pinchDistance = DistanceToSegment(firstShell.position,
+                    FindDescendant(loadingHand, "Thumb2").position,
+                    FindDescendant(loadingHand, "Index3").position);
+                if (!shellHasMoved && pinchDistance < 0.045f) handReachedShellBeforeMove = true;
                 var handToShellDistance = Vector3.Distance(loadingHandRenderer.bounds.center, firstShellRenderer.bounds.center);
                 minimumHandToShellDistance = Mathf.Min(minimumHandToShellDistance, handToShellDistance);
                 var shellToPortDistance = Vector3.Distance(firstShell.position, loadingPort.position);
@@ -80,6 +88,7 @@ public sealed class ChamberScenePlayTests
         Assert.That(maximumShellTravel, Is.GreaterThan(0.55f), "The first shell never travelled from the side stand to the open breech.");
         Assert.That(minimumHandToShellDistance, Is.LessThan(0.07f), "The loading hand never grasped the first shell.");
         Assert.That(shellMovedWithoutHand, Is.False, "The first shell moved without the loading hand holding it.");
+        Assert.That(handReachedShellBeforeMove, Is.True, "The shell moved before the loading fingers reached it.");
         Assert.That(bothHandsTookWeapon, Is.True, "The doll did not take the shotgun with both hands before opening it.");
         Assert.That(weaponLiftedByBothHands, Is.True, "The doll gripped the shotgun but never picked it up.");
         Assert.That(maximumWeaponLift, Is.GreaterThan(0.30f), "The shotgun barely left the table.");
@@ -91,7 +100,7 @@ public sealed class ChamberScenePlayTests
         Assert.That(shellPinchDistanceAtPort, Is.LessThan(0.03f), "The shell was not held between the loading fingers at the breech.");
         Assert.That(shellMovedWithoutGunSupport, Is.False, "The supporting hand released the shotgun during loading.");
 
-        yield return new WaitForSeconds(10.8f);
+        yield return new WaitForSeconds(13.3f);
         foreach (var item in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include))
             if (item.name.StartsWith("Shotgun Shell ")) Assert.That(item.gameObject.activeSelf, Is.False, $"{item.name} was not loaded.");
         Assert.That(Vector3.Distance(pumpRestPosition, pump.localPosition), Is.LessThan(0.001f), "Shotgun did not close after the opening load.");
@@ -151,15 +160,27 @@ public sealed class ChamberScenePlayTests
         Assert.That(GameObject.Find("Apparition Red Focus"), Is.Not.Null);
         var tableFocus = GameObject.Find("Table Cold Focus").GetComponent<Light>();
         Assert.That(tableFocus, Is.Not.Null);
-        Assert.That(tableFocus.intensity, Is.GreaterThanOrEqualTo(3.7f), "The shotgun work light is too dim.");
-        Assert.That(tableFocus.spotAngle, Is.GreaterThanOrEqualTo(64f), "The shotgun work light is too narrow.");
+        Assert.That(tableFocus.intensity, Is.GreaterThanOrEqualTo(5.1f), "The shotgun work light is too dim.");
+        Assert.That(tableFocus.range, Is.GreaterThanOrEqualTo(4.7f), "The shotgun work light does not reach the whole table.");
+        Assert.That(tableFocus.spotAngle, Is.GreaterThanOrEqualTo(74f), "The shotgun work light is too narrow.");
+        var softTableFill = GameObject.Find("Soft Table Fill").GetComponent<Light>();
+        Assert.That(softTableFill.intensity, Is.GreaterThanOrEqualTo(1.1f), "The hand-loading fill light is too dim.");
+        var overhead = GameObject.Find("Flickering Interrogation Light").GetComponent<Light>();
+        Assert.That(overhead.intensity, Is.GreaterThan(1.2f), "The runtime flicker blacks out the room too aggressively.");
         Assert.That(RenderSettings.ambientLight.maxColorComponent, Is.LessThan(0.002f), "The room ambient light is not black enough.");
         var mainMusic = (AudioSource)typeof(ChamberLogicGame).GetField("musicSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
+        var liveShot = (AudioClip)typeof(ChamberLogicGame).GetField("liveShotClip", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
+        var blankClick = (AudioClip)typeof(ChamberLogicGame).GetField("blankClickClip", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(game);
         var layeredMusic = GameObject.Find("Horror Music Layer").GetComponent<AudioSource>();
         var dollMusic = GameObject.Find("Doll Music Box").GetComponent<AudioSource>();
         Assert.That(mainMusic.clip.name, Is.EqualTo("Creepy_Ambient_Layer"));
         Assert.That(layeredMusic.clip.name, Is.EqualTo("Abandoned_Passages"));
         Assert.That(dollMusic.clip.name, Is.EqualTo("Doll_Spooky_Waltz"));
+        Assert.That(liveShot.name, Is.EqualTo("Shotgun_Boom"));
+        Assert.That(liveShot.length, Is.InRange(1.4f, 1.7f), "Live fire is not using the full shotgun report asset.");
+        Assert.That(liveShot.channels, Is.EqualTo(2));
+        Assert.That(blankClick.name, Is.EqualTo("Shotgun_Dry_Click"));
+        Assert.That(blankClick.length, Is.InRange(0.3f, 0.4f), "Blank fire is not using the short mechanical click asset.");
         Assert.That(mainMusic.isPlaying, Is.True);
         Assert.That(layeredMusic.isPlaying, Is.True);
         Assert.That(dollMusic.isPlaying, Is.True);
