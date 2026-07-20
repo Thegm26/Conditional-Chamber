@@ -42,6 +42,7 @@ public sealed class ChamberScenePlayTests
         var shellMovedWithoutGunSupport = false;
         var weaponLiftedByBothHands = false;
         var maximumWeaponLift = 0f;
+        var maximumWeaponRotation = 0f;
         var minimumShellToPortDistance = float.MaxValue;
         var shellAxisErrorAtPort = 180f;
         var shellPinchDistanceAtPort = float.MaxValue;
@@ -49,6 +50,7 @@ public sealed class ChamberScenePlayTests
         {
             bothHandsTookWeapon |= loadingHand.parent == rearGrip && supportHand.parent == foreGrip;
             maximumWeaponLift = Mathf.Max(maximumWeaponLift, Vector3.Distance(shotgunTablePosition, shotgun.position));
+            maximumWeaponRotation = Mathf.Max(maximumWeaponRotation, Quaternion.Angle(shotgunTableRotation, shotgun.rotation));
             weaponLiftedByBothHands |= Vector3.Distance(shotgunTablePosition, shotgun.position) > 0.20f &&
                                        loadingHand.parent == rearGrip && supportHand.parent == foreGrip;
             maximumOpenTravel = Mathf.Max(maximumOpenTravel, Vector3.Distance(pumpRestPosition, pump.localPosition));
@@ -81,7 +83,9 @@ public sealed class ChamberScenePlayTests
         Assert.That(bothHandsTookWeapon, Is.True, "The doll did not take the shotgun with both hands before opening it.");
         Assert.That(weaponLiftedByBothHands, Is.True, "The doll gripped the shotgun but never picked it up.");
         Assert.That(maximumWeaponLift, Is.GreaterThan(0.30f), "The shotgun barely left the table.");
+        Assert.That(maximumWeaponRotation, Is.GreaterThan(45f), "The shotgun translated to loading height without rotating out of its table pose.");
         Assert.That(Vector3.Distance(loadingPose.position, shotgun.position), Is.LessThan(0.03f), "Shotgun missed the authored loading pose.");
+        Assert.That(Quaternion.Angle(loadingPose.rotation, shotgun.rotation), Is.LessThan(0.5f), "Shotgun missed the authored loading rotation.");
         Assert.That(minimumShellToPortDistance, Is.LessThan(0.015f), "The shell never entered the shotgun loading port.");
         Assert.That(shellAxisErrorAtPort, Is.LessThan(1f), "The shell entered the breech sideways.");
         Assert.That(shellPinchDistanceAtPort, Is.LessThan(0.03f), "The shell was not held between the loading fingers at the breech.");
@@ -94,7 +98,7 @@ public sealed class ChamberScenePlayTests
         Assert.That(Vector3.Distance(shotgunTablePosition, shotgun.position), Is.LessThan(0.002f), "Shotgun was not lowered back onto the table.");
         Assert.That(Quaternion.Angle(shotgunTableRotation, shotgun.rotation), Is.LessThan(0.1f));
         Assert.That(game.enabled, Is.True);
-        Debug.Log($"[OpeningTransformTrace] gunLift={maximumWeaponLift:F3}m pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m handGrip={minimumHandToShellDistance:F3}m portError={minimumShellToPortDistance:F3}m shellAxis={shellAxisErrorAtPort:F2}deg pinch={shellPinchDistanceAtPort:F3}m start={shellStartPosition}");
+        Debug.Log($"[OpeningTransformTrace] gunLift={maximumWeaponLift:F3}m gunRotation={maximumWeaponRotation:F1}deg pumpTravel={maximumOpenTravel:F4}m shellTravel={maximumShellTravel:F3}m handGrip={minimumHandToShellDistance:F3}m portError={minimumShellToPortDistance:F3}m shellAxis={shellAxisErrorAtPort:F2}deg pinch={shellPinchDistanceAtPort:F3}m start={shellStartPosition}");
     }
 
     [UnityTest]
@@ -248,21 +252,31 @@ public sealed class ChamberScenePlayTests
         var leftRestPosition = leftHand.localPosition;
         var rightOpenFingerSpan = Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position);
         var leftOpenFingerSpan = Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position);
+        var weaponRotationBeforeAim = shotgun.rotation;
+        var dealerAimRotation = GameObject.Find("Dealer Hand Grip — Player").transform.rotation;
         game.StartCoroutine((IEnumerator)InvokeWithResult(game, "ResolveShot", false, false));
-        yield return new WaitForSeconds(1.48f);
+        var maximumAimRotation = 0f;
+        for (var elapsed = 0f; elapsed < 1.48f; elapsed += Time.deltaTime)
+        {
+            var rotationFromTable = Quaternion.Angle(weaponRotationBeforeAim, shotgun.rotation);
+            maximumAimRotation = Mathf.Max(maximumAimRotation, rotationFromTable);
+            yield return null;
+        }
         var rightGrip = GameObject.Find("Apparition Right Grip").transform;
         var leftGrip = GameObject.Find("Apparition Left Grip").transform;
         Assert.That(Vector3.Distance(rightHand.position, rightGrip.position), Is.LessThan(0.001f), "Direct right hand misses the rear grip.");
         Assert.That(Vector3.Distance(leftHand.position, leftGrip.position), Is.LessThan(0.001f), "Direct left hand misses the fore grip.");
         Assert.That(rightHand.parent, Is.EqualTo(rightGrip));
         Assert.That(leftHand.parent, Is.EqualTo(leftGrip));
+        Assert.That(maximumAimRotation, Is.GreaterThan(45f), "Dealer shotgun did not rotate out of the table pose.");
+        Assert.That(Quaternion.Angle(shotgun.rotation, dealerAimRotation), Is.LessThan(0.5f), "Dealer shotgun missed its final aiming rotation.");
         Assert.That(Quaternion.Angle(Quaternion.identity, FindDescendant(rightHand, "Index2").localRotation), Is.GreaterThan(42f), "Right fingers did not curl around the rear grip.");
         Assert.That(Quaternion.Angle(Quaternion.identity, FindDescendant(leftHand, "Middle2").localRotation), Is.GreaterThan(42f), "Left fingers did not curl around the fore grip.");
         Assert.That(Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position), Is.LessThan(rightOpenFingerSpan * 0.86f), "Right index finger curled away from the palm.");
         Assert.That(Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position), Is.LessThan(leftOpenFingerSpan * 0.86f), "Left middle finger curled away from the palm.");
         AssertHandWrapsGrip("dealer-player-right", shotgun, GameObject.Find("Shotgun Rear Grip Debug Point").transform, rightHand);
         AssertHandWrapsGrip("dealer-player-left", shotgun, GameObject.Find("Shotgun Fore Grip Debug Point").transform, leftHand);
-        Debug.Log($"[HandGripTrace] rightSpan={Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position):F3}/{rightOpenFingerSpan:F3}m leftSpan={Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position):F3}/{leftOpenFingerSpan:F3}m");
+        Debug.Log($"[HandGripTrace] gunRotation={maximumAimRotation:F1}deg rightSpan={Vector3.Distance(FindDescendant(rightHand, "Index3").position, FindDescendant(rightHand, "Hand").position):F3}/{rightOpenFingerSpan:F3}m leftSpan={Vector3.Distance(FindDescendant(leftHand, "Middle3").position, FindDescendant(leftHand, "Hand").position):F3}/{leftOpenFingerSpan:F3}m");
         var rearHandAxisError = Mathf.Min(Vector3.Angle(rightHand.up, muzzle.forward), Vector3.Angle(-rightHand.up, muzzle.forward));
         Assert.That(rearHandAxisError, Is.LessThan(12f), "Rear hand is not aligned along the shotgun stock.");
         Assert.That(Vector3.Angle(leftHand.up, muzzle.forward), Is.InRange(75f, 105f), "Fore hand is not wrapped across the fore-end.");

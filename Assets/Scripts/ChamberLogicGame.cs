@@ -438,15 +438,40 @@ public sealed class ChamberLogicGame : MonoBehaviour
     {
         var startPosition = playerWeapon.position;
         var startRotation = playerWeapon.rotation;
+        var travelDistance = Vector3.Distance(startPosition, destination.position);
+        var turnAngle = Quaternion.Angle(startRotation, destination.rotation);
+        var turnDirection = Mathf.Sign(Vector3.Dot(
+            Vector3.Cross(startRotation * Vector3.forward, destination.rotation * Vector3.forward),
+            Vector3.up));
+        if (Mathf.Approximately(turnDirection, 0f))
+            turnDirection = Mathf.Sign(destination.position.x - startPosition.x);
+        if (Mathf.Approximately(turnDirection, 0f)) turnDirection = 1f;
+
+        // Animate in world space so the old anchor cannot counter-rotate the
+        // weapon. The arc pitch and bank make the pickup read as weight being
+        // carried between two hands; both fade out before the final grip pose.
+        playerWeapon.SetParent(null, true);
         for (var t = 0f; t < duration; t += Time.deltaTime)
         {
             var progress = Mathf.SmoothStep(0f, 1f, t / duration);
-            var lift = Mathf.Sin(progress * Mathf.PI) * 0.16f;
+            var arc = Mathf.Sin(progress * Mathf.PI);
+            var lift = arc * Mathf.Lerp(0.10f, 0.18f, Mathf.Clamp01(travelDistance / 0.65f));
             playerWeapon.position = Vector3.Lerp(startPosition, destination.position, progress) + Vector3.up * lift;
-            playerWeapon.rotation = Quaternion.Slerp(startRotation, destination.rotation, progress);
+            playerWeapon.rotation = EvaluateCarriedWeaponRotation(
+                startRotation, destination.rotation, progress, travelDistance, turnAngle, turnDirection);
             yield return null;
         }
         SetWeaponAt(destination);
+    }
+
+    private static Quaternion EvaluateCarriedWeaponRotation(Quaternion startRotation, Quaternion destinationRotation,
+        float progress, float travelDistance, float turnAngle, float turnDirection)
+    {
+        var arc = Mathf.Sin(progress * Mathf.PI);
+        var carriedRotation = Quaternion.Slerp(startRotation, destinationRotation, progress);
+        var pitch = -arc * Mathf.Lerp(4f, 9f, Mathf.Clamp01(travelDistance / 0.65f));
+        var bank = arc * turnDirection * Mathf.Lerp(4f, 11f, Mathf.Clamp01(turnAngle / 90f));
+        return carriedRotation * Quaternion.Euler(pitch, 0f, bank);
     }
 
     private IEnumerator PumpWeapon(float duration)
